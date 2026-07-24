@@ -1,0 +1,231 @@
+---
+name: deploy-to-labs
+description: Deploy the app in ./app to the Protocol Labs Network sandbox. Use when the member asks to deploy, ship, or publish the app.
+---
+
+# Deploy to PLN Labs
+
+Deploys the app in `app/` to the PLN sandbox and returns its live URL.
+
+**Needs secrets? Decide BEFORE deploying — don't wait for the member to say so.**
+The member usually has no coding background and won't know their app "has secrets".
+Check for it yourself: does the app read any credential from the environment
+(`process.env.*` or equivalent), or call any external service that needs an API
+key (OpenAI/Anthropic, email/SMS, a database, a paid API)? A quick check:
+
+```bash
+grep -rniE 'process\.env\.|os\.environ|getenv' app --include='*.js' --include='*.ts' --include='*.py' | grep -viE 'PORT|NODE_ENV'
+```
+
+If anything secret shows up (or you wrote code that needs a key), do steps 1–5 as
+written but then follow "**Apps that need secrets (draft flow)**" below instead of
+step 6 — you register a draft and the member deploys from LabOS after entering the
+values there. Never deploy a secrets app directly and never accept key values in
+the chat.
+
+## Steps
+1. Read `pln-app.config.json` to get `connectEndpoint`, `deployEndpoint`,
+   `draftEndpoint`, `metadataEndpoint`, the `kitVersion` (sent with every upload
+   so PLN knows which kit built the app), and (if present) saved `appId`,
+   `appUid`, `appName`, and `appDescription`. If no `appId` exists yet, pick a
+   short, stable, lowercase slug (e.g. `hello-board`) and save it back to the
+   config. Never edit `kitVersion` by hand.
+2. **Settle the display name & description.** If `appName` in the config is
+   empty (first deploy), load the **app-metadata** skill
+   (`.claude/skills/app-metadata/SKILL.md`): propose a human-friendly name and
+   a 1–2 sentence description, get the member's **explicit approval** (revise
+   until they approve), and save the approved values to `appName`/
+   `appDescription` in the config. If `appName` is already set, **reuse the
+   saved values verbatim and don't re-ask** — the deploy form overwrites the
+   stored metadata, so anything else would revert what the member approved.
+   Only re-run the propose flow when the member explicitly asks to change the
+   name or description.
+3. **Get a deploy token via LabOS.** The kit has no token; obtain a short-lived one
+   through the connect flow:
+
+   a. Start a session (no auth needed). Set `clientName` to YOUR actual tool
+      name (e.g. "Claude Code", "Cursor", "Codex CLI") — it is shown to the
+      member on the approval page and recorded with the deployed app:
+
+   ```bash
+   curl -sX POST "<connectEndpoint>" \
+     -H "Content-Type: application/json" \
+     -d '{"clientName":"<your tool name>"}'
+   # → { "sessionId", "userCode", "connectUrl", "pollToken", "pollIntervalSec", "expiresAt" }
+   ```
+
+   b. **Tell the member, in your chat:** open `connectUrl` in their browser, sign in
+      to LabOS, confirm the code shown matches `userCode`, and click **Approve**.
+   c. Poll until the session is decided (every `pollIntervalSec` seconds, up to
+      `expiresAt`), sending the `pollToken` you received:
+
+   ```bash
+   curl -sX POST "<connectEndpoint>/poll" \
+     -H "Content-Type: application/json" \
+     -d '{"pollToken":"<pollToken>"}'
+   # pending  → keep polling
+   # approved → { "status":"approved", "deployToken":"plndeploy_…", "deployTokenExpiresAt" }
+   # denied   → the member lacks ai_apps.write; stop and tell them
+   # expired  → the link timed out; start a new session (step 3a)
+   ```
+
+   Hold `deployToken` **in memory only** — never write it to `pln-app.config.json`
+   or any other file, and never print it.
+4. Make sure `app/` runs locally first (`npm install && npm start`, hit
+   `/health`). For a migrated existing app, also confirm the migration checklist
+   in `AGENTS.md` is satisfied (self-contained `app/`, fitting Dockerfile, binds
+   `0.0.0.0`, no reliance on injected secrets).
+5. Zip the **contents** of `app/` so the `Dockerfile` sits at the ZIP root.
+   Exclude `node_modules`, build output, and — importantly — any secrets: real
+   `.env` files, tokens/keys, and data dirs must never enter the ZIP (the backend
+   stores it server-side).
+
+   ```bash
+   cd app && zip -r ../app.zip . \
+     -x 'node_modules/*' '*/node_modules/*' 'dist/*' '.next/*' '.env' '.env.*' '.data/*' && cd ..
+   # Sanity-check nothing sensitive slipped in:
+   unzip -l ../app.zip | grep -iE '\.env|secret|credential|\.pem|\.key' && echo 'STOP: secret in zip' || echo 'ok'
+   ```
+
+6. Upload the ZIP to the deploy endpoint as multipart/form-data, sending the
+   `deployToken` from step 3 in the `x-app-token` header. `name` and
+   `description` are the member-approved `appName`/`appDescription` from
+   `pln-app.config.json` (step 2) — send them verbatim. The PLN backend stores
+   the ZIP and triggers the build — no cloud credentials are needed:
+
+   ```bash
+   curl -X POST "<deployEndpoint>" \
+     -H "x-app-token: <deployToken>" \
+     -F "appId=<your-app-id>" \
+     -F "name=<the approved appName from pln-app.config.json>" \
+     -F "description=<the approved appDescription from pln-app.config.json>" \
+     -F "deploymentId=<unique id per deploy, e.g. a timestamp>" \
+     -F "kitVersion=<the kitVersion from pln-app.config.json>" \
+     -F "agentModel=<the model you are running on, e.g. claude-sonnet-4-5; omit the field if unknown>" \
+     -F "file=@app.zip;type=application/zip"
+   ```
+
+7. On success the response contains the app record with its deployment URL and
+   status:
+
+   ```json
+   { "uid": "cl…", "status": "READY", "url": "https://<appId>.deployment.plnetwork.io", "host": "...", "port": 31001 }
+   ```
+
+   Save the response's `uid` as `appUid` in `pln-app.config.json` (it addresses
+   the metadata endpoint later). Use the URL only for the internal checks below —
+   **do not reveal it to the member** (see "Keep the deployment URL private").
+   On `READY`, tell the member the app is live and can be opened from the
+   PL Infra → AI Apps dashboard. If `status` is `ERROR`, surface `notes`
+   (never the URL).
+
+   **After the FIRST successful deploy**, offer the optional one-pager PRD —
+   see "Offer the one-pager PRD" in the app-metadata skill. If the member wants
+   one, generate it, get approval, and save it via `metadataEndpoint` — no
+   redeploy involved. Don't re-offer it on later redeploys.
+
+8. **Verify the app is iframe-embeddable** (internal check — do not surface the URL
+   to the member). The dashboard shows it in an `<iframe>` from a sibling
+   `*.plnetwork.io` subdomain; check the live response headers:
+
+   ```bash
+   curl -sSI "https://<appId>.deployment.plnetwork.io/" | grep -iE 'x-frame-options|content-security-policy'
+   ```
+
+   It must pass BOTH:
+   - **No `X-Frame-Options` header** (it can't allow a sibling subdomain; if present
+     it blocks the embed).
+   - If a `Content-Security-Policy` is present, its `frame-ancestors` must include
+     `https://*.plnetwork.io` (and must NOT be `'none'`).
+
+   If either fails, the embed will show `refused to connect`. Fix the app's headers
+   (see the framing rule in `AGENTS.md`) and redeploy before reporting success.
+
+## Apps that need secrets (draft flow)
+When the app needs runtime secrets, replace the upload in step 6 with a **draft
+registration** — same multipart shape (including the approved `appName`/
+`appDescription` from the config), posted to `draftEndpoint`, plus
+`requiredEnvVars` (the env var NAMES the app reads; JSON array or
+comma-separated). Nothing is deployed yet:
+
+```bash
+curl -X POST "<draftEndpoint>" \
+  -H "x-app-token: <deployToken>" \
+  -F "appId=<your-app-id>" \
+  -F "name=<the approved appName from pln-app.config.json>" \
+  -F "description=<the approved appDescription from pln-app.config.json>" \
+  -F "deploymentId=<unique id per upload, e.g. a timestamp>" \
+  -F "kitVersion=<the kitVersion from pln-app.config.json>" \
+  -F "agentModel=<the model you are running on; omit the field if unknown>" \
+  -F 'requiredEnvVars=["OPENAI_API_KEY","SUPABASE_URL"]' \
+  -F "file=@app.zip;type=application/zip"
+# → { "uid": "cl…", "status": "DRAFT", "appPageUrl": "https://…/pl-infra/ai-apps/<uid>", "missingEnvVars": [ … ] }
+```
+
+Save the response's `uid` as `appUid` in `pln-app.config.json`, same as a
+regular deploy.
+
+**IMMEDIATELY give the member the `appPageUrl` link — this is the very next
+thing you do after the registration call returns, before anything else.** A
+draft deploys NOTHING by itself: until the member opens that link and clicks
+Deploy, they see no progress anywhere and will think the deployment is stuck.
+(`appPageUrl` is a LabOS page link — the "keep the deployment URL private" rule
+below does NOT apply to it; it exists to be shared.) Tell them in plain
+non-technical language — e.g. *"Your app is registered. Open this link, paste
+your OpenAI API key into the form, and click Deploy — that page is the only safe
+place for your key."* They enter the values there and click **Deploy**. The
+deploy runs immediately with the stored secrets; the app then appears as usual
+on the AI Apps dashboard.
+
+- **Never** ask the member to paste secret values into the chat, and never write
+  them to a file — LabOS is the only place values are entered. If they paste a
+  key into the chat anyway, don't use or repeat it — point them to `appPageUrl`
+  (and suggest rotating the key if it's sensitive).
+- To ship a **code update** later, re-register the draft (same `appId`, fresh
+  `deploymentId`, updated `requiredEnvVars` if they changed) and send the member
+  back to `appPageUrl` to click Deploy. Stored secret values remain valid.
+- The member can also update secret values and redeploy entirely from LabOS —
+  no agent involvement needed.
+
+## Keep the deployment URL private
+This rule covers ONLY the deployed app's own address — the URL/host/port on
+`<appId>.deployment.plnetwork.io`. Do not print, link, or otherwise tell the member
+that URL, host, or port — in your messages, summaries, or saved files. The member
+opens their app through the PL Infra → AI Apps dashboard, which embeds it; they
+never need the raw URL. You may use the URL silently for the verification and
+health checks here, but it must not appear in anything you report back. (The
+config file stores only the `appId`, not the URL — keep it that way.)
+
+It does NOT cover the LabOS links — `connectUrl` (approval page) and
+`appPageUrl` (secrets + deploy page). Those are made to be opened by the member,
+and you MUST share them in chat whenever the flow produces one. Withholding
+`appPageUrl` strands a draft app: nothing deploys until the member opens it.
+
+## If the upload times out (504) or seems to hang
+A slow build can exceed the gateway's request timeout, so the upload may return a
+`504 Gateway Time-out` (or hang) **even though the build succeeded**. Do NOT assume
+failure and blindly re-upload. Instead poll the app (internal check — don't share the
+URL with the member):
+
+```bash
+curl -sS -m 20 -o /dev/null -w '%{http_code}\n' "https://<appId>.deployment.plnetwork.io/health"
+```
+
+If it returns `200` within a minute or two, the deploy worked — proceed to the
+verification steps. Only re-deploy if it stays unreachable.
+
+## Notes
+- Reuse the same `appId` to redeploy an existing app; use a new `deploymentId`
+  each time. Derive the URL from the `appId` for your own checks, but treat it as
+  sensitive (see "Keep the deployment URL private").
+- Redeploys resend the saved `appName`/`appDescription` verbatim and never
+  re-run the propose-and-approve flow. Renames, description edits, and PRD
+  changes go through the **app-metadata** skill (`metadataEndpoint`) — they
+  never require a redeploy, and a redeploy never touches the PRD.
+- The deploy token is short-lived (≈1 hour) and tied to the member who approved the
+  connect link. Keep it in memory only — never save it to a file or print it. Within
+  the window you can redeploy without reconnecting; once it expires (deploy returns
+  `401`), run the connect flow again to get a fresh token.
+- Runtime secrets are supported only through the draft flow above — the sandbox
+  injects exactly the env vars the member provided in LabOS. Non-secret config
+  should ship sensible defaults — see the migration checklist in `AGENTS.md`.

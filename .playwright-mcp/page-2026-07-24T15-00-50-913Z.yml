@@ -1,0 +1,17 @@
+- generic [active] [ref=f4e1]:
+  - banner [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - link [ref=f4e4] [cursor=pointer]:
+        - /url: /
+      - navigation [ref=f4e7]:
+        - link "Home" [ref=f4e8] [cursor=pointer]:
+          - /url: /profile
+      - generic [ref=f4e9]:
+        - button "New roadmap" [ref=f4e23] [cursor=pointer]
+        - button "Notifications" [ref=f4e10] [cursor=pointer]
+        - button "Dev Owner" [ref=f4e24] [cursor=pointer]:
+          - img [ref=f4e15]:
+            - generic [ref=f4e16]: D
+  - main [ref=f4e18]
+  - status
+  - alert [ref=f4e22]

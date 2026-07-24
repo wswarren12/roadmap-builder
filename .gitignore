@@ -1,0 +1,16 @@
+# Secrets & local env — never commit
+.env
+.env.*
+*.local
+
+# Dependencies & build output
+node_modules/
+.next/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# OS noise
+.DS_Store
+*.log

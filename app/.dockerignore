@@ -1,0 +1,12 @@
+node_modules
+.next
+tests
+playwright.config.ts
+playwright-report
+test-results
+vitest.config.ts
+coverage
+.env
+.env.*
+*.log
+.DS_Store
