@@ -14,3 +14,14 @@ playwright-report/
 # OS noise
 .DS_Store
 *.log
+
+# Local agent/kit tooling — stays on disk, not in the public repo
+.agents/
+.claude/
+.mcp.json
+.playwright-mcp/
+.vscode/
+AGENTS.md
+CLAUDE.md
+pln-app.config.json
+skills-lock.json
