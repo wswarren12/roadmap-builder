@@ -1,11 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   Initiative,
+  InviteTokens,
   ItemInput,
   Roadmap,
   RoadmapInput,
   RoadmapItem,
   RoadmapShare,
+  ShareRole,
   SprintInput,
   SprintItem,
   UserState,
@@ -83,9 +85,16 @@ function mapShare(r: any): RoadmapShare {
     email: r.email,
     memberUid: r.member_uid,
     memberName: r.member_name,
+    role: r.role === 'editor' ? 'editor' : 'viewer',
     createdAt: r.created_at,
   };
 }
+
+// Which roadmaps column stores each role's invite token (004_editor_invites).
+const TOKEN_COLUMN: Record<ShareRole, string> = {
+  viewer: 'invite_token',
+  editor: 'editor_invite_token',
+};
 
 function itemPatch(patch: Partial<ItemInput>) {
   const row: Record<string, unknown> = {};
@@ -410,13 +419,18 @@ export class SupabaseStore implements Store {
     return mapShare(unwrap(res));
   }
 
-  async addUidShare(roadmapId: string, memberUid: string, memberName: string) {
+  async addUidShare(roadmapId: string, memberUid: string, memberName: string, role: ShareRole) {
     const res = await this.sb
       .from('roadmap_shares')
-      .insert({ roadmap_id: roadmapId, member_uid: memberUid, member_name: memberName })
+      .insert({ roadmap_id: roadmapId, member_uid: memberUid, member_name: memberName, role })
       .select()
       .single();
     return mapShare(unwrap(res));
+  }
+
+  async setShareRole(id: string, role: ShareRole) {
+    const { error } = await this.sb.from('roadmap_shares').update({ role }).eq('id', id);
+    if (error) throw new Error(error.message);
   }
 
   async listRoadmapsSharedWithUid(memberUid: string) {
@@ -436,31 +450,37 @@ export class SupabaseStore implements Store {
     if (error) throw new Error(error.message);
   }
 
-  async getInviteToken(roadmapId: string) {
+  async getInviteTokens(roadmapId: string): Promise<InviteTokens> {
     const { data, error } = await this.sb
       .from('roadmaps')
-      .select('invite_token')
+      .select('invite_token, editor_invite_token')
       .eq('id', roadmapId)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return data?.invite_token ?? null;
+    return {
+      editor: data?.editor_invite_token ?? null,
+      viewer: data?.invite_token ?? null,
+    };
   }
 
-  async setInviteToken(roadmapId: string, token: string | null) {
+  async setInviteToken(roadmapId: string, role: ShareRole, token: string | null) {
     const { error } = await this.sb
       .from('roadmaps')
-      .update({ invite_token: token })
+      .update({ [TOKEN_COLUMN[role]]: token })
       .eq('id', roadmapId);
     if (error) throw new Error(error.message);
   }
 
   async findRoadmapByInviteToken(token: string) {
-    const { data, error } = await this.sb
-      .from('roadmaps')
-      .select('*')
-      .eq('invite_token', token)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return data ? mapRoadmap(data) : null;
+    for (const role of ['viewer', 'editor'] as ShareRole[]) {
+      const { data, error } = await this.sb
+        .from('roadmaps')
+        .select('*')
+        .eq(TOKEN_COLUMN[role], token)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (data) return { roadmap: mapRoadmap(data), role };
+    }
+    return null;
   }
 }

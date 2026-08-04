@@ -49,21 +49,21 @@ describe('roadmap lifecycle (F-1)', () => {
     expect(me.lastRoadmapId).toBe(body.roadmap.id);
   });
 
-  it('enforces max 5 initiatives server-side (AC-1.2)', async () => {
+  it('enforces max 8 initiatives server-side (AC-1.2)', async () => {
     const { roadmap } = await seedRoadmap(store);
-    for (let i = 2; i <= 5; i++) {
+    for (let i = 2; i <= 8; i++) {
       const res = await postInitiative(
         reqAs(OWNER, 'POST', { name: `Row ${i}` }),
         { params: { id: roadmap.id } },
       );
       expect(res.status).toBe(201);
     }
-    const sixth = await postInitiative(
-      reqAs(OWNER, 'POST', { name: 'Row 6' }),
+    const ninth = await postInitiative(
+      reqAs(OWNER, 'POST', { name: 'Row 9' }),
       { params: { id: roadmap.id } },
     );
-    expect(sixth.status).toBe(400);
-    expect((await sixth.json()).error).toMatch(/max 5/i);
+    expect(ninth.status).toBe(400);
+    expect((await ninth.json()).error).toMatch(/max 8/i);
   });
 
   it('renames initiatives (AC-1.4) and reorders positions', async () => {

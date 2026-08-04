@@ -64,11 +64,21 @@ export interface SprintItem {
   updatedAt: string;
 }
 
+/** The role an invite link (and the share it creates) grants. */
+export type ShareRole = 'editor' | 'viewer';
+
+/** Per-roadmap invite tokens, one independent link per grantable role. */
+export interface InviteTokens {
+  editor: string | null;
+  viewer: string | null;
+}
+
 /**
- * A viewer grant. Exactly one identity field set is populated:
+ * An access grant. Exactly one identity field set is populated:
  * - memberUid/memberName — claimed via invite link (primary mechanism; the
  *   v1.4 member context has no email, so uid is the reliable identifier)
  * - email — legacy whitelist path, dormant until LabOS exposes member email
+ * `role` is what the grant allows: viewers read, editors also change content.
  */
 export interface RoadmapShare {
   id: string;
@@ -76,6 +86,7 @@ export interface RoadmapShare {
   email: string | null;
   memberUid: string | null;
   memberName: string | null;
+  role: ShareRole;
   createdAt: string;
 }
 
@@ -85,7 +96,7 @@ export interface UserState {
   lastVisitedAt: string;
 }
 
-export type Role = 'owner' | 'viewer' | 'none';
+export type Role = 'owner' | 'editor' | 'viewer' | 'none';
 
 /** Payload shapes accepted by the API. */
 export interface RoadmapInput {

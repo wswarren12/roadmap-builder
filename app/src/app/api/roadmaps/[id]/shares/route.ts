@@ -9,9 +9,9 @@ interface Params {
   params: { id: string };
 }
 
-/** Whitelist is owner-only, both listing and mutating (PRD §9 table). */
+/** The share list is owner-only, both listing and mutating (PRD §9 table). */
 export async function GET(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'write');
+  const auth = await authorizeRoadmap(req, params.id, 'owner');
   if (auth instanceof NextResponse) return auth;
 
   const shares = await getStore().listShares(auth.roadmap.id);
@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'write');
+  const auth = await authorizeRoadmap(req, params.id, 'owner');
   if (auth instanceof NextResponse) return auth;
   const { roadmap, identity } = auth;
 

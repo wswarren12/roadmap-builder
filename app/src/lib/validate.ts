@@ -5,7 +5,7 @@ import {
   toUTC,
 } from './dates';
 
-export const MAX_INITIATIVES = 5;
+export const MAX_INITIATIVES = 8;
 export const MIN_MONTHS = 3;
 export const MAX_MONTHS = 12;
 

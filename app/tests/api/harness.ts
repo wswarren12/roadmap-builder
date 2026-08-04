@@ -8,6 +8,7 @@ import type { Identity } from '@/lib/types';
  */
 
 export const OWNER: Identity = { uid: 'u-owner', name: 'Olive Owner', email: 'owner@pl.network' };
+export const EDITOR: Identity = { uid: 'u-editor', name: 'Ed Editor', email: 'editor@pl.network' };
 export const VIEWER: Identity = { uid: 'u-viewer', name: 'Vic Viewer', email: 'viewer@pl.network' };
 export const STRANGER: Identity = { uid: 'u-stranger', name: 'Sam Stranger', email: 'stranger@pl.network' };
 
@@ -38,7 +39,8 @@ export async function json(res: Response) {
   return res.json();
 }
 
-/** Creates a roadmap owned by OWNER with VIEWER whitelisted; returns ids. */
+/** Creates a roadmap owned by OWNER with VIEWER whitelisted and EDITOR
+ *  granted an editor uid-share; returns ids. */
 export async function seedRoadmap(store: MemoryStore) {
   const roadmap = await store.createRoadmap(
     { uid: OWNER.uid, email: OWNER.email },
@@ -51,6 +53,7 @@ export async function seedRoadmap(store: MemoryStore) {
   );
   const initiative = await store.createInitiative(roadmap.id, 'Onboarding');
   await store.addShare(roadmap.id, VIEWER.email!);
+  await store.addUidShare(roadmap.id, EDITOR.uid, EDITOR.name, 'editor');
   const item = await store.createItem(
     roadmap.id,
     {

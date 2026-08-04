@@ -158,7 +158,7 @@ export function SubcalendarView({
   }
 
   const { item, sprints, roadmap, initiativeName, role } = data;
-  const editable = role === 'owner';
+  const editable = role === 'owner' || role === 'editor';
   const weeks = weekColumns(item.startDate, item.endDate);
   const totalDays = daysBetween(item.startDate, item.endDate) + 1;
   const pxPerDay = Math.max(gridWidth / totalDays, MIN_PX_PER_DAY);

@@ -22,12 +22,12 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     const itemId = await seedItem(request, owner, seeded);
     await seedSprint(request, owner, itemId);
 
-    // owner creates the invite link in the panel
+    // owner creates the viewer invite link in the panel
     await page.goto(`/roadmaps/${seeded.roadmapId}`);
     await page.getByTestId('share-button').click();
-    await page.getByTestId('invite-generate').click();
-    await expect(page.getByTestId('invite-active')).toBeVisible();
-    const joinUrl = (await page.getByTestId('invite-link').textContent())!.trim();
+    await page.getByTestId('invite-generate-viewer').click();
+    await expect(page.getByTestId('invite-active-viewer')).toBeVisible();
+    const joinUrl = (await page.getByTestId('invite-link-viewer').textContent())!.trim();
     expect(joinUrl).toContain('/join/');
 
     // viewer opens the link signed-in → lands on the roadmap read-only
@@ -56,7 +56,7 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await expect(vp.getByTestId('sprint-card-edit')).toHaveCount(0);
     await expect(vp.getByTestId('sprint-card-delete')).toHaveCount(0);
 
-    // viewer appears by verified name when the owner reopens the panel
+    // viewer appears by verified name + role when the owner reopens the panel
     // (the list is fetched on open, so a reopen reflects the new claim).
     // Wait for the drawer's ~200ms close animation to finish before
     // reopening — Radix drops a reopen dispatched mid-exit-animation.
@@ -64,6 +64,7 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await expect(page.getByTestId('share-panel')).toBeHidden();
     await page.getByTestId('share-button').click();
     await expect(page.getByTestId('share-row')).toContainText(viewer.name);
+    await expect(page.getByTestId('share-role')).toContainText('Viewer');
 
     // roadmap shows on the viewer's profile under "Shared with you"
     await vp.goto('/profile');
@@ -72,6 +73,60 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     ).toHaveCount(1);
 
     await viewerContext.close();
+  });
+
+  test('editor invite link → editor can edit and add, but not share or delete', async ({
+    browser,
+    page,
+    context,
+    request,
+  }) => {
+    const owner = makeUser('owner');
+    const editor = makeUser('editor');
+    await loginAs(context, owner);
+    const seeded = await seedRoadmap(request, owner);
+    await seedItem(request, owner, seeded);
+
+    // owner creates the editor invite link in the panel
+    await page.goto(`/roadmaps/${seeded.roadmapId}`);
+    await page.getByTestId('share-button').click();
+    await page.getByTestId('invite-generate-editor').click();
+    await expect(page.getByTestId('invite-active-editor')).toBeVisible();
+    const joinUrl = (await page.getByTestId('invite-link-editor').textContent())!.trim();
+    expect(joinUrl).toContain('/join/');
+    // the viewer link stays independent and un-generated
+    await expect(page.getByTestId('invite-generate-viewer')).toBeVisible();
+
+    // editor opens the link signed-in → lands on the roadmap with edit surface
+    const editorContext = await browser.newContext();
+    await loginAs(editorContext, editor);
+    const ep = await editorContext.newPage();
+    await ep.goto(joinUrl);
+    await expect(ep).toHaveURL(new RegExp(`/roadmaps/${seeded.roadmapId}$`));
+
+    await expect(ep.getByTestId('editor-badge')).toBeVisible();
+    await expect(ep.getByTestId('roadmap-title')).toBeEnabled();
+    await expect(ep.getByTestId('add-item').first()).toBeVisible();
+    await expect(ep.getByTestId('add-initiative')).toBeVisible();
+    // owner-only surface stays hidden
+    await expect(ep.getByTestId('share-button')).toHaveCount(0);
+    await expect(ep.getByTestId('delete-roadmap')).toHaveCount(0);
+
+    // editor makes a real addition: a new initiative row appears and sticks
+    const rowsBefore = await ep.getByTestId('initiative-row').count();
+    await ep.getByTestId('add-initiative').click();
+    await expect(ep.getByTestId('initiative-row')).toHaveCount(rowsBefore + 1);
+    await ep.reload();
+    await expect(ep.getByTestId('initiative-row')).toHaveCount(rowsBefore + 1);
+
+    // editor appears with the Editor role when the owner reopens the panel
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('share-panel')).toBeHidden();
+    await page.getByTestId('share-button').click();
+    await expect(page.getByTestId('share-row')).toContainText(editor.name);
+    await expect(page.getByTestId('share-role')).toContainText('Editor');
+
+    await editorContext.close();
   });
 
   test('server rejects every crafted viewer mutation with 403 (AC-6.3)', async ({
@@ -194,12 +249,12 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
 
     await page.goto(`/roadmaps/${seeded.roadmapId}`);
     await page.getByTestId('share-button').click();
-    await page.getByTestId('invite-generate').click();
-    const firstUrl = (await page.getByTestId('invite-link').textContent())!.trim();
+    await page.getByTestId('invite-generate-viewer').click();
+    const firstUrl = (await page.getByTestId('invite-link-viewer').textContent())!.trim();
 
     // rotate → different link
-    await page.getByTestId('invite-rotate').click();
-    await expect(page.getByTestId('invite-link')).not.toHaveText(firstUrl);
+    await page.getByTestId('invite-rotate-viewer').click();
+    await expect(page.getByTestId('invite-link-viewer')).not.toHaveText(firstUrl);
 
     // old link is dead for a new visitor
     const lateContext = await browser.newContext();
@@ -209,8 +264,8 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await expect(lp.getByText('This invite link is no longer valid')).toBeVisible();
 
     // turn off → panel returns to generate state
-    await page.getByTestId('invite-disable').click();
-    await expect(page.getByTestId('invite-generate')).toBeVisible();
+    await page.getByTestId('invite-disable-viewer').click();
+    await expect(page.getByTestId('invite-generate-viewer')).toBeVisible();
 
     await lateContext.close();
   });
@@ -231,11 +286,18 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await page.getByTestId('create-roadmap').click();
     await expect(page.getByTestId('roadmap-view')).toBeVisible();
 
-    // Share it: generate an invite link.
+    // Share it: generate a viewer invite link.
     await page.getByTestId('share-button').click();
-    await page.getByTestId('invite-generate').click();
-    const joinUrl = (await page.getByTestId('invite-link').textContent())!.trim();
+    await page.getByTestId('invite-generate-viewer').click();
+    const joinUrl = (await page.getByTestId('invite-link-viewer').textContent())!.trim();
     expect(joinUrl).toContain('/join/');
+
+    // Close the drawer before touching the nav: while the modal drawer is
+    // open, Radix aria-hides the page background, and role-based locators
+    // (getByRole) exclude aria-hidden elements — the avatar click would
+    // never resolve.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('share-panel')).toBeHidden();
 
     // Switch to Dev Two via the avatar popover.
     await page.getByRole('button', { name: 'Dev One' }).click();

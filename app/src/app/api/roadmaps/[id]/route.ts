@@ -85,9 +85,9 @@ export async function PATCH(req: Request, { params }: Params) {
   return NextResponse.json({ roadmap: updated });
 }
 
-/** Cascade delete (items, sprints, shares go with it). */
+/** Cascade delete (items, sprints, shares go with it). Owner only. */
 export async function DELETE(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'write');
+  const auth = await authorizeRoadmap(req, params.id, 'owner');
   if (auth instanceof NextResponse) return auth;
 
   await getStore().deleteRoadmap(auth.roadmap.id);

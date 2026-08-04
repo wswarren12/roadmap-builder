@@ -174,7 +174,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   }
 
   const { roadmap, initiatives, items, role } = data;
-  const editable = role === 'owner';
+  const editable = role === 'owner' || role === 'editor';
+  const isOwner = role === 'owner';
   const spanStart = roadmap.startMonth;
   const spanEnd = rangeEndDate(roadmap.endMonth);
   const totalDays = rangeTotalDays(roadmap.startMonth, roadmap.endMonth);
@@ -383,7 +384,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             }}
           />
           <div className="header-actions">
-            {editable && (
+            {isOwner && (
               <Button
                 variant="secondary"
                 styleType="border"
@@ -405,7 +406,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             >
               Download PDF
             </Button>
-            {editable && (
+            {isOwner && (
               <Button
                 variant="error"
                 styleType="light"
@@ -461,6 +462,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             {months.length} months · {items.length} items
           </span>
           {role === 'viewer' && <span data-testid="viewer-badge">View only</span>}
+          {role === 'editor' && <span data-testid="editor-badge">Can edit</span>}
           {rangeError && (
             <span className="range-error" data-testid="range-error">
               {rangeError}
@@ -633,7 +635,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                 </Button>
                 {initiatives.length >= MAX_INITIATIVES && (
                   <span className="max-hint" data-testid="max-initiatives-hint">
-                    max 5 initiatives
+                    max {MAX_INITIATIVES} initiatives
                   </span>
                 )}
               </div>
@@ -657,7 +659,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         />
       )}
 
-      {editable && (
+      {isOwner && (
         <SharePanel open={shareOpen} onOpenChange={setShareOpen} roadmapId={roadmap.id} />
       )}
 

@@ -32,14 +32,19 @@ the first deploy. Authorization is enforced in the API layer (owner /
 whitelisted-viewer / none per roadmap), not RLS — LabOS identities are not
 Supabase Auth users.
 
-**Sharing model:** viewers join via an **invite link** — the owner generates a
-`/join/<token>` URL in the share panel; opening it while signed in to LabOS
-binds the visitor's verified member uid as a read-only viewer (individually
-revocable; rotating or disabling the link never removes already-joined
-viewers). This is uid-based because the v1.4 member-context API returns no
-email; the email-whitelist path remains in the schema and API, dormant until
-LabOS exposes member email (`src/lib/auth.ts` picks it up automatically).
-Migrations: apply `001_init.sql` then `002_invite_links.sql`.
+**Sharing model:** people join via **role-based invite links** — the share
+panel offers an **editor link** and a **viewer link**, each an independent
+`/join/<token>` URL (create/rotate/disable separately). Opening one while
+signed in to LabOS binds the visitor's verified member uid with that link's
+role: editors can edit and add initiatives/items/sprints and the roadmap
+header; viewers are read-only. Sharing management and roadmap deletion stay
+owner-only. Claims never downgrade (a viewer opening an editor link is
+upgraded in place); every grant is individually revocable, and rotating or
+disabling a link never removes already-joined members. This is uid-based
+because the v1.4 member-context API returns no email; the email-whitelist
+path remains in the schema and API, dormant until LabOS exposes member email
+(`src/lib/auth.ts` picks it up automatically).
+Migrations: apply `001_init.sql` … `004_editor_invites.sql` in order.
 
 ## Tests
 

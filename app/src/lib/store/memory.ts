@@ -1,11 +1,13 @@
 import { randomUUID } from 'crypto';
 import type {
   Initiative,
+  InviteTokens,
   ItemInput,
   Roadmap,
   RoadmapInput,
   RoadmapItem,
   RoadmapShare,
+  ShareRole,
   SprintInput,
   SprintItem,
   UserState,
@@ -23,7 +25,7 @@ interface Db {
   sprints: Map<string, SprintItem>;
   shares: Map<string, RoadmapShare>;
   userState: Map<string, UserState>;
-  inviteTokens: Map<string, string>; // roadmapId → token
+  inviteTokens: Map<string, InviteTokens>; // roadmapId → per-role tokens
 }
 
 function emptyDb(): Db {
@@ -302,23 +304,31 @@ export class MemoryStore implements Store {
       email: email.toLowerCase(),
       memberUid: null,
       memberName: null,
+      role: 'viewer',
       createdAt: now(),
     };
     this.db.shares.set(share.id, share);
     return share;
   }
 
-  async addUidShare(roadmapId: string, memberUid: string, memberName: string) {
+  async addUidShare(roadmapId: string, memberUid: string, memberName: string, role: ShareRole) {
     const share: RoadmapShare = {
       id: randomUUID(),
       roadmapId,
       email: null,
       memberUid,
       memberName,
+      role,
       createdAt: now(),
     };
     this.db.shares.set(share.id, share);
     return share;
+  }
+
+  async setShareRole(id: string, role: ShareRole) {
+    const share = this.db.shares.get(id);
+    if (!share) throw new Error('share not found');
+    this.db.shares.set(id, { ...share, role });
   }
 
   async listRoadmapsSharedWithUid(memberUid: string) {
@@ -336,18 +346,24 @@ export class MemoryStore implements Store {
     this.db.shares.delete(id);
   }
 
-  async getInviteToken(roadmapId: string) {
-    return this.db.inviteTokens.get(roadmapId) ?? null;
+  async getInviteTokens(roadmapId: string): Promise<InviteTokens> {
+    const tokens = this.db.inviteTokens.get(roadmapId);
+    return { editor: tokens?.editor ?? null, viewer: tokens?.viewer ?? null };
   }
 
-  async setInviteToken(roadmapId: string, token: string | null) {
-    if (token === null) this.db.inviteTokens.delete(roadmapId);
-    else this.db.inviteTokens.set(roadmapId, token);
+  async setInviteToken(roadmapId: string, role: ShareRole, token: string | null) {
+    const tokens = await this.getInviteTokens(roadmapId);
+    this.db.inviteTokens.set(roadmapId, { ...tokens, [role]: token });
   }
 
   async findRoadmapByInviteToken(token: string) {
-    for (const [roadmapId, t] of this.db.inviteTokens) {
-      if (t === token) return this.db.roadmaps.get(roadmapId) ?? null;
+    for (const [roadmapId, tokens] of this.db.inviteTokens) {
+      const role: ShareRole | null =
+        tokens.editor === token ? 'editor' : tokens.viewer === token ? 'viewer' : null;
+      if (role) {
+        const roadmap = this.db.roadmaps.get(roadmapId);
+        return roadmap ? { roadmap, role } : null;
+      }
     }
     return null;
   }

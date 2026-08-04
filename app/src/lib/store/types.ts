@@ -1,10 +1,12 @@
 import type {
   Initiative,
+  InviteTokens,
   ItemInput,
   Roadmap,
   RoadmapInput,
   RoadmapItem,
   RoadmapShare,
+  ShareRole,
   SprintInput,
   SprintItem,
   UserState,
@@ -65,12 +67,20 @@ export interface Store {
   listShares(roadmapId: string): Promise<RoadmapShare[]>;
   getShare(id: string): Promise<RoadmapShare | null>;
   addShare(roadmapId: string, email: string): Promise<RoadmapShare>;
-  addUidShare(roadmapId: string, memberUid: string, memberName: string): Promise<RoadmapShare>;
+  addUidShare(
+    roadmapId: string,
+    memberUid: string,
+    memberName: string,
+    role: ShareRole,
+  ): Promise<RoadmapShare>;
+  setShareRole(id: string, role: ShareRole): Promise<void>;
   listRoadmapsSharedWithUid(memberUid: string): Promise<Roadmap[]>;
   removeShare(id: string): Promise<void>;
 
-  // invite links (one active token per roadmap; null = disabled)
-  getInviteToken(roadmapId: string): Promise<string | null>;
-  setInviteToken(roadmapId: string, token: string | null): Promise<void>;
-  findRoadmapByInviteToken(token: string): Promise<Roadmap | null>;
+  // invite links (one active token per roadmap per role; null = disabled)
+  getInviteTokens(roadmapId: string): Promise<InviteTokens>;
+  setInviteToken(roadmapId: string, role: ShareRole, token: string | null): Promise<void>;
+  findRoadmapByInviteToken(
+    token: string,
+  ): Promise<{ roadmap: Roadmap; role: ShareRole } | null>;
 }

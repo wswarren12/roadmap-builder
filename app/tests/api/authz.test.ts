@@ -9,13 +9,13 @@ import { PATCH as patchSprint, DELETE as deleteSprint } from '@/app/api/sprints/
 import { GET as getShares, POST as postShare } from '@/app/api/roadmaps/[id]/shares/route';
 import { DELETE as deleteShare } from '@/app/api/shares/[id]/route';
 import type { MemoryStore } from '@/lib/store';
-import { OWNER, STRANGER, VIEWER, freshStore, reqAs, seedRoadmap } from './harness';
+import { EDITOR, OWNER, STRANGER, VIEWER, freshStore, reqAs, seedRoadmap } from './harness';
 
 /**
  * The full authorization matrix (AC-6.1..6.4, PRD §8 "Viewer access matrix"):
- * owner / viewer / stranger / anonymous × every read and write endpoint.
- * Server-side enforcement is the requirement — these tests hit the handlers
- * directly, bypassing any UI affordance hiding.
+ * owner / editor / viewer / stranger / anonymous × every read, write, and
+ * owner-only endpoint. Server-side enforcement is the requirement — these
+ * tests hit the handlers directly, bypassing any UI affordance hiding.
  */
 
 let store: MemoryStore;
@@ -26,13 +26,20 @@ beforeEach(async () => {
   seeded = await seedRoadmap(store);
 });
 
-type Caller = { label: string; identity: typeof OWNER | null; read: number; write: number };
+type Caller = {
+  label: string;
+  identity: typeof OWNER | null;
+  read: number;
+  write: number;
+  ownerOnly: number;
+};
 
 const CALLERS: Caller[] = [
-  { label: 'owner', identity: OWNER, read: 200, write: 200 },
-  { label: 'viewer', identity: VIEWER, read: 200, write: 403 },
-  { label: 'stranger', identity: STRANGER, read: 403, write: 403 },
-  { label: 'anonymous', identity: null, read: 401, write: 401 },
+  { label: 'owner', identity: OWNER, read: 200, write: 200, ownerOnly: 200 },
+  { label: 'editor', identity: EDITOR, read: 200, write: 200, ownerOnly: 403 },
+  { label: 'viewer', identity: VIEWER, read: 200, write: 403, ownerOnly: 403 },
+  { label: 'stranger', identity: STRANGER, read: 403, write: 403, ownerOnly: 403 },
+  { label: 'anonymous', identity: null, read: 401, write: 401, ownerOnly: 401 },
 ];
 
 describe('read endpoints', () => {
@@ -49,9 +56,9 @@ describe('read endpoints', () => {
   }
 });
 
-describe('write endpoints reject non-owners (AC-6.3)', () => {
+describe('write endpoints reject read-only callers (AC-6.3)', () => {
   const expectWrite = (caller: Caller, actual: number, okStatus = 200) => {
-    if (caller.label === 'owner') {
+    if (caller.write === 200) {
       expect([okStatus, 200, 201]).toContain(actual);
     } else {
       expect(actual).toBe(caller.write);
@@ -124,19 +131,6 @@ describe('write endpoints reject non-owners (AC-6.3)', () => {
       expectWrite(caller, res.status);
     });
 
-    it(`${caller.label} GET shares (owner-only)`, async () => {
-      const res = await getShares(reqAs(caller.identity), { params: { id: seeded.roadmap.id } });
-      expectWrite(caller, res.status);
-    });
-
-    it(`${caller.label} POST share`, async () => {
-      const res = await postShare(
-        reqAs(caller.identity, 'POST', { email: 'new@pl.network' }),
-        { params: { id: seeded.roadmap.id } },
-      );
-      expectWrite(caller, res.status, 201);
-    });
-
     it(`${caller.label} DELETE sprint`, async () => {
       const res = await deleteSprint(reqAs(caller.identity, 'DELETE'), {
         params: { id: seeded.sprint.id },
@@ -151,11 +145,45 @@ describe('write endpoints reject non-owners (AC-6.3)', () => {
       expectWrite(caller, res.status);
     });
 
+  }
+});
+
+describe('owner-only endpoints reject editors too (sharing & destruction stay with the owner)', () => {
+  const expectOwnerOnly = (caller: Caller, actual: number, okStatus = 200) => {
+    if (caller.ownerOnly === 200) {
+      expect([okStatus, 200, 201]).toContain(actual);
+    } else {
+      expect(actual).toBe(caller.ownerOnly);
+    }
+  };
+
+  for (const caller of CALLERS) {
+    it(`${caller.label} GET shares`, async () => {
+      const res = await getShares(reqAs(caller.identity), { params: { id: seeded.roadmap.id } });
+      expectOwnerOnly(caller, res.status);
+    });
+
+    it(`${caller.label} POST share`, async () => {
+      const res = await postShare(
+        reqAs(caller.identity, 'POST', { email: 'new@pl.network' }),
+        { params: { id: seeded.roadmap.id } },
+      );
+      expectOwnerOnly(caller, res.status, 201);
+    });
+
+    it(`${caller.label} DELETE share`, async () => {
+      const shares = await store.listShares(seeded.roadmap.id);
+      const res = await deleteShare(reqAs(caller.identity, 'DELETE'), {
+        params: { id: shares[0].id },
+      });
+      expectOwnerOnly(caller, res.status);
+    });
+
     it(`${caller.label} DELETE roadmap`, async () => {
       const res = await deleteRoadmap(reqAs(caller.identity, 'DELETE'), {
         params: { id: seeded.roadmap.id },
       });
-      expectWrite(caller, res.status);
+      expectOwnerOnly(caller, res.status);
     });
   }
 });
@@ -184,13 +212,14 @@ describe('whitelist behavior (AC-6.1, AC-6.4)', () => {
   });
 
   it('duplicate share add is a no-op with hint', async () => {
+    const before = (await store.listShares(seeded.roadmap.id)).length;
     const res = await postShare(
       reqAs(OWNER, 'POST', { email: 'Viewer@PL.Network' }),
       { params: { id: seeded.roadmap.id } },
     );
     expect(res.status).toBe(200);
     expect((await res.json()).noop).toBe('duplicate');
-    expect(await store.listShares(seeded.roadmap.id)).toHaveLength(1);
+    expect(await store.listShares(seeded.roadmap.id)).toHaveLength(before);
   });
 
   it("owner's own email add is a no-op with hint", async () => {

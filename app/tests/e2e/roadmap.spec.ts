@@ -44,7 +44,7 @@ test.describe('F-1 roadmap canvas & header', () => {
     await expect(page).toHaveURL(/\/profile/);
   });
 
-  test('sixth initiative is blocked with a max-5 hint (AC-1.2)', async ({
+  test('ninth initiative is blocked with a max-8 hint (AC-1.2)', async ({
     page,
     context,
     request,
@@ -55,12 +55,12 @@ test.describe('F-1 roadmap canvas & header', () => {
 
     await page.goto(`/roadmaps/${seeded.roadmapId}`);
     const addBtn = page.getByTestId('add-initiative');
-    for (let i = 2; i <= 5; i++) {
+    for (let i = 2; i <= 8; i++) {
       await addBtn.click();
       await expect(page.getByTestId('initiative-row')).toHaveCount(i);
     }
     await expect(addBtn).toBeDisabled();
-    await expect(page.getByTestId('max-initiatives-hint')).toHaveText(/max 5 initiatives/i);
+    await expect(page.getByTestId('max-initiatives-hint')).toHaveText(/max 8 initiatives/i);
   });
 
   test('initiative rename persists without a page reload (AC-1.4)', async ({
