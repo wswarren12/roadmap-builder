@@ -550,6 +550,15 @@
     z-index: 4;
     transition: none;
     animation: none;
+    // Let elementsFromPoint see the bar underneath — a drop onto another
+    // item's bar converts the dragged item into its sprint (F-11).
+    pointer-events: none;
+  }
+
+  &.bar--drop-target {
+    outline: 2px solid var(--border-brand-subtle);
+    outline-offset: 1px;
+    box-shadow: var(--shadow-sm);
   }
 
   &.bar--readonly {

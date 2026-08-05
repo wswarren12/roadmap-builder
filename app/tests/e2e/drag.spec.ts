@@ -16,6 +16,11 @@ import {
  * AC-2.8: Given an item in initiative A, When its bar is dragged vertically
  * into initiative B's lanes, Then it renders in B's row and survives reload.
  *
+ * F-11: Given items X (with a sprint) and Y, When X's bar is dropped onto
+ * Y's bar and confirmed, Then X disappears, Y stretches to cover X's dates,
+ * and Y's drill-down lists X and X's former sprint as sprint items;
+ * cancelling changes nothing.
+ *
  * F-10: Given initiative A with an item (that has a sprint), When A's drag
  * handle is dropped onto initiative B, Then a confirm dialog explains the
  * conversion; cancelling changes nothing (AC-10.5), confirming replaces A
@@ -59,6 +64,53 @@ test.describe('drag across initiatives', () => {
     await page.reload();
     await expect(
       page.getByTestId('initiative-row').nth(1).getByTestId('item-bar'),
+    ).toHaveCount(1);
+  });
+
+  test('item dropped onto another item becomes its sprint after confirm; cancel is a no-op (AC-11.1)', async ({
+    page,
+    context,
+    request,
+  }) => {
+    const owner = makeUser('owner');
+    await loginAs(context, owner);
+    const seeded = await seedRoadmap(request, owner);
+    const sourceId = await seedItem(request, owner, seeded); // 08-01..09-15
+    await seedSprint(request, owner, sourceId);
+    await seedItem(request, owner, seeded, {
+      title: 'Payments v2',
+      startDate: '2026-10-01',
+      endDate: '2026-10-20',
+    });
+
+    await page.goto(`/roadmaps/${seeded.roadmapId}`);
+    const bars = page.getByTestId('item-bar');
+    await expect(bars).toHaveCount(2);
+    const source = bars.filter({ hasText: 'Signup revamp' });
+    const target = bars.filter({ hasText: 'Payments v2' });
+
+    // cancel path — both bars stay, dates untouched
+    await dragOnto(page, source, target);
+    await expect(page.locator('.confirm-message')).toContainText(
+      /"Signup revamp" will become a sprint item of "Payments v2"/,
+    );
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(bars).toHaveCount(2);
+    await expect(source).toHaveAttribute('data-start', '2026-08-01');
+
+    // confirm path — source folds into the target, which stretches
+    await dragOnto(page, source, target);
+    await page.getByTestId('confirm-delete').click();
+    await expect(bars).toHaveCount(1);
+    await expect(bars).toContainText('Payments v2');
+    await expect(bars).toHaveAttribute('data-start', '2026-08-01');
+    await expect(bars).toHaveAttribute('data-end', '2026-10-20');
+
+    // drill-down: the old item and its sprint are now sprint items
+    await bars.click();
+    await expect(page.getByTestId('sprint-bar')).toHaveCount(2);
+    await expect(
+      page.getByTestId('sprint-bar').filter({ hasText: 'Signup revamp' }),
     ).toHaveCount(1);
   });
 

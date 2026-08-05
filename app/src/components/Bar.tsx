@@ -29,6 +29,7 @@ export function Bar({
   milestoneText,
   tooltip,
   enterIndex = 0,
+  dropTarget = false,
   onOpen,
   onCommitDates,
   onDragMove,
@@ -52,6 +53,8 @@ export function Bar({
   milestoneText?: string;
   tooltip: React.ReactNode;
   enterIndex?: number;
+  /** Highlighted as the drop target of a convert-to-sprint drag (F-11). */
+  dropTarget?: boolean;
   onOpen: () => void;
   onCommitDates: (
     startDate: string,
@@ -85,7 +88,9 @@ export function Bar({
 
   const bar = (
     <div
-      className={`bar${dragging ? ' bar--dragging' : ''}${editable ? '' : ' bar--readonly'}`}
+      className={`bar${dragging ? ' bar--dragging' : ''}${
+        dropTarget ? ' bar--drop-target' : ''
+      }${editable ? '' : ' bar--readonly'}`}
       style={{
         left,
         width,

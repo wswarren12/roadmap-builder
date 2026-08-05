@@ -67,11 +67,16 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   // Drag targets: lane hover while an item bar drags (AC-2.8) and row hover
   // while an initiative row drags toward a convert drop (F-10).
   const [dragOverLaneId, setDragOverLaneId] = useState<string | null>(null);
+  const [dragOverBarId, setDragOverBarId] = useState<string | null>(null);
   const [draggingInitiativeId, setDraggingInitiativeId] = useState<string | null>(null);
   const [rowDropId, setRowDropId] = useState<string | null>(null);
   const [convertRequest, setConvertRequest] = useState<{
     source: Initiative;
     target: Initiative;
+  } | null>(null);
+  const [sprintConvertRequest, setSprintConvertRequest] = useState<{
+    source: ItemWithCount;
+    target: ItemWithCount;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -310,15 +315,29 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   }
 
   /** Topmost element carrying the given data attribute under a point. */
-  function dataIdAtPoint(x: number, y: number, key: 'initiativeId' | 'rowInitiativeId') {
+  function dataIdAtPoint(
+    x: number,
+    y: number,
+    key: 'initiativeId' | 'rowInitiativeId' | 'entityId',
+    excludeValue?: string,
+  ) {
     for (const el of document.elementsFromPoint(x, y)) {
       const value = (el as HTMLElement).dataset?.[key];
-      if (value) return value;
+      if (value && value !== excludeValue) return value;
     }
     return null;
   }
 
   function handleItemDragMove(item: ItemWithCount, x: number, y: number) {
+    // Hovering another item's bar wins over its lane: that drop converts
+    // the dragged item into a sprint of the target (F-11).
+    const overBar = dataIdAtPoint(x, y, 'entityId', item.id);
+    if (overBar) {
+      setDragOverBarId(overBar);
+      setDragOverLaneId(null);
+      return;
+    }
+    setDragOverBarId(null);
     const over = dataIdAtPoint(x, y, 'initiativeId');
     setDragOverLaneId(over && over !== item.initiativeId ? over : null);
   }
@@ -329,8 +348,21 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     endDate: string,
     drop?: { x: number; y: number },
   ) {
-    // A drop may land in another initiative's lanes — hit-test it (AC-2.8).
     setDragOverLaneId(null);
+    setDragOverBarId(null);
+
+    // A drop onto another item's bar is a convert-to-sprint gesture (F-11) —
+    // it consumes the drag; any date preview is discarded.
+    const overBarId = drop ? dataIdAtPoint(drop.x, drop.y, 'entityId', item.id) : null;
+    if (overBarId) {
+      const target = items.find((i) => i.id === overBarId);
+      if (target) {
+        setSprintConvertRequest({ source: item, target });
+        return true;
+      }
+    }
+
+    // Otherwise the drop may land in another initiative's lanes (AC-2.8).
     const overId = drop ? dataIdAtPoint(drop.x, drop.y, 'initiativeId') : null;
     const initiativeId = overId && overId !== item.initiativeId ? overId : undefined;
     const datesChanged = startDate !== item.startDate || endDate !== item.endDate;
@@ -424,6 +456,27 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         `"${convertRequest.source.name}" is now an item of "${convertRequest.target.name}"`,
       );
       setConvertRequest(null);
+      await load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Convert failed — please retry');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmSprintConvert() {
+    if (!sprintConvertRequest) return;
+    setBusy(true);
+    try {
+      await api(`/api/items/${sprintConvertRequest.source.id}/convert`, {
+        method: 'POST',
+        body: { targetItemId: sprintConvertRequest.target.id },
+      });
+      toast(
+        'success',
+        `"${sprintConvertRequest.source.title}" is now a sprint item of "${sprintConvertRequest.target.title}"`,
+      );
+      setSprintConvertRequest(null);
       await load();
     } catch (e) {
       toast('error', e instanceof ApiError ? e.message : 'Convert failed — please retry');
@@ -741,6 +794,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         onOpen={() => openItem(item)}
                         onCommitDates={(s, e, drop) => commitItemDates(item, s, e, drop)}
                         onDragMove={(x, y) => handleItemDragMove(item, x, y)}
+                        dropTarget={dragOverBarId === item.id}
                       />
                     ))}
                   </div>
@@ -797,6 +851,24 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         message={`"${roadmap.title}" will be permanently deleted. This will also delete ${items.length} roadmap item${items.length === 1 ? '' : 's'}, ${totalSprints} sprint item${totalSprints === 1 ? '' : 's'}, and its share list.`}
         busy={busy}
         onConfirm={deleteRoadmap}
+      />
+
+      <ConfirmModal
+        open={sprintConvertRequest !== null}
+        onOpenChange={(open) => !open && setSprintConvertRequest(null)}
+        title="Convert item into a sprint item?"
+        confirmLabel="Convert"
+        message={
+          sprintConvertRequest
+            ? `"${sprintConvertRequest.source.title}" will become a sprint item of "${sprintConvertRequest.target.title}"${
+                sprintConvertRequest.source.sprintCount > 0
+                  ? ` along with its ${sprintConvertRequest.source.sprintCount} sprint item${sprintConvertRequest.source.sprintCount === 1 ? '' : 's'}`
+                  : ''
+              }. "${sprintConvertRequest.target.title}" will stretch to cover its dates if needed.`
+            : ''
+        }
+        busy={busy}
+        onConfirm={confirmSprintConvert}
       />
 
       <ConfirmModal

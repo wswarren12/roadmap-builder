@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { POST as convertInitiative } from '@/app/api/initiatives/[id]/convert/route';
+import { POST as convertItem } from '@/app/api/items/[id]/convert/route';
 import { POST as postInitiative } from '@/app/api/roadmaps/[id]/initiatives/route';
 import { POST as postItem } from '@/app/api/roadmaps/[id]/items/route';
 import { PATCH as patchItem } from '@/app/api/items/[id]/route';
@@ -14,6 +15,14 @@ import { EDITOR, OWNER, VIEWER, freshStore, reqAs, seedRoadmap } from './harness
  * - Given an item in initiative A, When PATCHed with initiativeId B (same
  *   roadmap), Then the item belongs to B.
  * - Given an initiativeId from another roadmap, Then 400 and no change.
+ *
+ * Convert item into a sprint of another item (F-11):
+ * - Given items X and Y, When X is converted into Y, Then X is deleted, Y
+ *   gains a sprint named like X (dris→dri), X's existing sprints flatten
+ *   into Y, and Y's dates expand to cover X's span if needed (AC-11.1).
+ * - Given target == source or a target on another roadmap, Then 400
+ *   (AC-11.2).
+ * - Given a viewer, Then 403; editors may convert (AC-11.3).
  *
  * Convert initiative into an item (F-10):
  * - Given initiative A with items, When converted into B, Then A is deleted,
@@ -71,6 +80,121 @@ describe('move item across initiatives (AC-2.8)', () => {
     );
     expect(res.status).toBe(400);
     expect((await store.getItem(item.id))!.initiativeId).toBe(item.initiativeId);
+  });
+});
+
+describe('convert item into a sprint of another item (F-11)', () => {
+  it('moves the item under the target as a sprint, flattens its sprints, expands target dates (AC-11.1)', async () => {
+    const { roadmap, initiative, item } = await seedRoadmap(store);
+    // seeded: item "Signup revamp" (08-01..09-15) with sprint "Sprint 1".
+    const target = (
+      await (
+        await postItem(
+          reqAs(OWNER, 'POST', {
+            initiativeId: initiative.id,
+            title: 'Payments v2',
+            startDate: '2026-08-20',
+            endDate: '2026-09-01',
+          }),
+          { params: { id: roadmap.id } },
+        )
+      ).json()
+    ).item;
+
+    const res = await convertItem(
+      reqAs(OWNER, 'POST', { targetItemId: target.id }),
+      { params: { id: item.id } },
+    );
+    expect(res.status).toBe(201);
+    const { item: updated } = await res.json();
+
+    expect(updated.id).toBe(target.id);
+    // target grew to cover the source's span
+    expect(updated.startDate).toBe('2026-08-01');
+    expect(updated.endDate).toBe('2026-09-15');
+    expect(updated.sprintCount).toBe(2); // source item + its flattened sprint
+
+    const sprints = await store.listSprints(target.id);
+    const names = sprints.map((s) => s.name).sort();
+    expect(names).toEqual(['Signup revamp', 'Sprint 1']);
+    const revamp = sprints.find((s) => s.name === 'Signup revamp')!;
+    expect(revamp.startDate).toBe('2026-08-01');
+    expect(revamp.endDate).toBe('2026-09-15');
+
+    expect(await store.getItem(item.id)).toBeNull();
+  });
+
+  it('rejects converting an item into itself and cross-roadmap targets (AC-11.2)', async () => {
+    const { item } = await seedRoadmap(store);
+    const self = await convertItem(reqAs(OWNER, 'POST', { targetItemId: item.id }), {
+      params: { id: item.id },
+    });
+    expect(self.status).toBe(400);
+
+    const foreign = await (
+      await postRoadmap(
+        reqAs(OWNER, 'POST', {
+          title: 'Other',
+          startMonth: '2026-07-01',
+          endMonth: '2026-12-01',
+        }),
+      )
+    ).json();
+    const foreignItem = (
+      await (
+        await postItem(
+          reqAs(OWNER, 'POST', {
+            initiativeId: foreign.initiatives[0].id,
+            title: 'Elsewhere',
+            startDate: '2026-08-01',
+            endDate: '2026-08-10',
+          }),
+          { params: { id: foreign.roadmap.id } },
+        )
+      ).json()
+    ).item;
+
+    const cross = await convertItem(
+      reqAs(OWNER, 'POST', { targetItemId: foreignItem.id }),
+      { params: { id: item.id } },
+    );
+    expect(cross.status).toBe(400);
+    expect(await store.getItem(item.id)).not.toBeNull();
+
+    const missing = await convertItem(reqAs(OWNER, 'POST', {}), {
+      params: { id: item.id },
+    });
+    expect(missing.status).toBe(400);
+  });
+
+  it('viewers cannot convert; editors can (AC-11.3)', async () => {
+    const { roadmap, initiative, item } = await seedRoadmap(store);
+    const target = (
+      await (
+        await postItem(
+          reqAs(OWNER, 'POST', {
+            initiativeId: initiative.id,
+            title: 'Payments v2',
+            startDate: '2026-08-20',
+            endDate: '2026-09-01',
+          }),
+          { params: { id: roadmap.id } },
+        )
+      ).json()
+    ).item;
+
+    const denied = await convertItem(
+      reqAs(VIEWER, 'POST', { targetItemId: target.id }),
+      { params: { id: item.id } },
+    );
+    expect(denied.status).toBe(403);
+    expect(await store.getItem(item.id)).not.toBeNull();
+
+    const allowed = await convertItem(
+      reqAs(EDITOR, 'POST', { targetItemId: target.id }),
+      { params: { id: item.id } },
+    );
+    expect(allowed.status).toBe(201);
   });
 });
 
