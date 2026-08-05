@@ -14,10 +14,18 @@ interface DragOptions {
   endDate: string;
   clampStart: string;
   clampEnd: string;
-  /** Called on drop with changed dates; resolve false to revert. */
-  onCommit: (startDate: string, endDate: string) => Promise<boolean>;
+  /** Called on drop with the final dates and pointer position (for lane
+   *  hit-testing, AC-2.8); resolve false to revert. Dates may equal the
+   *  originals when the drag was purely vertical. */
+  onCommit: (
+    startDate: string,
+    endDate: string,
+    drop: { x: number; y: number },
+  ) => Promise<boolean>;
   /** Clean click (movement under threshold) — drill-down etc. (AC-3.3). */
   onClick: () => void;
+  /** Fired while dragging — lets the caller highlight drop targets. */
+  onDragMove?: (x: number, y: number) => void;
 }
 
 interface Preview {
@@ -36,10 +44,12 @@ export function useBarDrag(options: DragOptions) {
   const state = useRef<{
     mode: DragMode;
     originX: number;
+    originY: number;
     moved: boolean;
     start: string;
     end: string;
     latest: Preview | null;
+    lastPoint: { x: number; y: number };
   } | null>(null);
 
   const optionsRef = useRef(options);
@@ -55,10 +65,12 @@ export function useBarDrag(options: DragOptions) {
       state.current = {
         mode,
         originX: e.clientX,
+        originY: e.clientY,
         moved: false,
         start: opts.startDate,
         end: opts.endDate,
         latest: null,
+        lastPoint: { x: e.clientX, y: e.clientY },
       };
 
       const onMove = (ev: PointerEvent) => {
@@ -66,11 +78,22 @@ export function useBarDrag(options: DragOptions) {
         if (!st) return;
         const opts2 = optionsRef.current;
         const dx = ev.clientX - st.originX;
-        if (!st.moved && Math.abs(dx) < CLICK_THRESHOLD_PX) return;
+        const dy = ev.clientY - st.originY;
+        // Vertical movement counts too — a straight-down drag into another
+        // initiative row must not be mistaken for a click (AC-2.8).
+        if (
+          !st.moved &&
+          Math.abs(dx) < CLICK_THRESHOLD_PX &&
+          Math.abs(dy) < CLICK_THRESHOLD_PX
+        ) {
+          return;
+        }
         if (!opts2.enabled) return; // viewers: never a drag, click still works
 
         st.moved = true;
+        st.lastPoint = { x: ev.clientX, y: ev.clientY };
         setDragging(true);
+        opts2.onDragMove?.(ev.clientX, ev.clientY);
 
         const dayDelta = Math.round(dx / opts2.pxPerDay);
         const duration = daysBetween(st.start, st.end);
@@ -115,16 +138,11 @@ export function useBarDrag(options: DragOptions) {
           return;
         }
 
-        const finalDates = st.latest;
-        if (
-          !finalDates ||
-          (finalDates.startDate === st.start && finalDates.endDate === st.end)
-        ) {
-          setPreview(null);
-          return;
-        }
-
-        const ok = await opts2.onCommit(finalDates.startDate, finalDates.endDate);
+        // Even with unchanged dates the drop may land on another initiative
+        // row, so a moved drag always commits — the caller no-ops when
+        // nothing actually changed (AC-2.8).
+        const finalDates = st.latest ?? { startDate: st.start, endDate: st.end };
+        const ok = await opts2.onCommit(finalDates.startDate, finalDates.endDate, st.lastPoint);
         setPreview(null);
         void ok;
       };

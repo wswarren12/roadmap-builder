@@ -64,6 +64,16 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   const [rangeError, setRangeError] = useState<string | null>(null);
   const laneDown = useRef<{ x: number; y: number } | null>(null);
 
+  // Drag targets: lane hover while an item bar drags (AC-2.8) and row hover
+  // while an initiative row drags toward a convert drop (F-10).
+  const [dragOverLaneId, setDragOverLaneId] = useState<string | null>(null);
+  const [draggingInitiativeId, setDraggingInitiativeId] = useState<string | null>(null);
+  const [rowDropId, setRowDropId] = useState<string | null>(null);
+  const [convertRequest, setConvertRequest] = useState<{
+    source: Initiative;
+    target: Initiative;
+  } | null>(null);
+
   const load = useCallback(async () => {
     try {
       const res = await api<RoadmapData>(`/api/roadmaps/${roadmapId}`);
@@ -299,21 +309,57 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     }
   }
 
-  async function commitItemDates(item: ItemWithCount, startDate: string, endDate: string) {
+  /** Topmost element carrying the given data attribute under a point. */
+  function dataIdAtPoint(x: number, y: number, key: 'initiativeId' | 'rowInitiativeId') {
+    for (const el of document.elementsFromPoint(x, y)) {
+      const value = (el as HTMLElement).dataset?.[key];
+      if (value) return value;
+    }
+    return null;
+  }
+
+  function handleItemDragMove(item: ItemWithCount, x: number, y: number) {
+    const over = dataIdAtPoint(x, y, 'initiativeId');
+    setDragOverLaneId(over && over !== item.initiativeId ? over : null);
+  }
+
+  async function commitItemDates(
+    item: ItemWithCount,
+    startDate: string,
+    endDate: string,
+    drop?: { x: number; y: number },
+  ) {
+    // A drop may land in another initiative's lanes — hit-test it (AC-2.8).
+    setDragOverLaneId(null);
+    const overId = drop ? dataIdAtPoint(drop.x, drop.y, 'initiativeId') : null;
+    const initiativeId = overId && overId !== item.initiativeId ? overId : undefined;
+    const datesChanged = startDate !== item.startDate || endDate !== item.endDate;
+    if (!initiativeId && !datesChanged) return true;
+
     // Optimistic move with revert-on-failure (F-2 error states).
     const prev = data!.items;
     setData((d) =>
       d
         ? {
             ...d,
-            items: d.items.map((i) => (i.id === item.id ? { ...i, startDate, endDate } : i)),
+            items: d.items.map((i) =>
+              i.id === item.id
+                ? { ...i, startDate, endDate, initiativeId: initiativeId ?? i.initiativeId }
+                : i,
+            ),
           }
         : d,
     );
     try {
+      const body: Record<string, string> = {};
+      if (datesChanged) {
+        body.startDate = startDate;
+        body.endDate = endDate;
+      }
+      if (initiativeId) body.initiativeId = initiativeId;
       const res = await api<{ item: ItemWithCount }>(`/api/items/${item.id}`, {
         method: 'PATCH',
-        body: { startDate, endDate },
+        body,
       });
       setData((d) =>
         d ? { ...d, items: d.items.map((i) => (i.id === item.id ? res.item : i)) } : d,
@@ -321,8 +367,68 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       return true;
     } catch (e) {
       setData((d) => (d ? { ...d, items: prev } : d));
-      toast('error', e instanceof ApiError ? e.message : "Couldn't save the new dates");
+      toast('error', e instanceof ApiError ? e.message : "Couldn't save the change");
       return false;
+    }
+  }
+
+  // Row drag → convert an initiative into an item of another one (F-10).
+  function startInitiativeDrag(initiative: Initiative) {
+    return (e: React.PointerEvent) => {
+      if (!editable || e.button !== 0) return;
+      e.preventDefault();
+      const origin = { x: e.clientX, y: e.clientY, moved: false };
+
+      const onMove = (ev: PointerEvent) => {
+        if (
+          !origin.moved &&
+          Math.abs(ev.clientX - origin.x) < 4 &&
+          Math.abs(ev.clientY - origin.y) < 4
+        ) {
+          return;
+        }
+        origin.moved = true;
+        setDraggingInitiativeId(initiative.id);
+        const over = dataIdAtPoint(ev.clientX, ev.clientY, 'rowInitiativeId');
+        setRowDropId(over && over !== initiative.id ? over : null);
+      };
+
+      const onUp = (ev: PointerEvent) => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        setDraggingInitiativeId(null);
+        setRowDropId(null);
+        if (!origin.moved) return;
+        const targetId = dataIdAtPoint(ev.clientX, ev.clientY, 'rowInitiativeId');
+        const target = initiatives.find((i) => i.id === targetId);
+        if (target && target.id !== initiative.id) {
+          setConvertRequest({ source: initiative, target });
+        }
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+  }
+
+  async function confirmConvert() {
+    if (!convertRequest) return;
+    setBusy(true);
+    try {
+      await api(`/api/initiatives/${convertRequest.source.id}/convert`, {
+        method: 'POST',
+        body: { targetInitiativeId: convertRequest.target.id },
+      });
+      toast(
+        'success',
+        `"${convertRequest.source.name}" is now an item of "${convertRequest.target.name}"`,
+      );
+      setConvertRequest(null);
+      await load();
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Convert failed — please retry');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -488,9 +594,26 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
               const { lanes, laneCount } = assignLanes(rowItems);
               const rowHeight = laneCount * (LANE_H + LANE_GAP) + LANE_GAP;
               return (
-                <div className="swim-row" key={initiative.id} data-testid="initiative-row">
+                <div
+                  className={`swim-row${
+                    rowDropId === initiative.id ? ' swim-row--drop-target' : ''
+                  }${draggingInitiativeId === initiative.id ? ' swim-row--dragging' : ''}`}
+                  key={initiative.id}
+                  data-testid="initiative-row"
+                  data-row-initiative-id={initiative.id}
+                >
                   <div className="row-label" style={{ minHeight: rowHeight }}>
                     <div className="row-label-name">
+                      {editable && (
+                        <span
+                          className="initiative-drag-handle"
+                          data-testid="initiative-drag-handle"
+                          title="Drag onto another initiative to turn this one into an item"
+                          onPointerDown={startInitiativeDrag(initiative)}
+                        >
+                          ⋮⋮
+                        </span>
+                      )}
                       <input
                         className="row-name-input"
                         defaultValue={initiative.name}
@@ -554,11 +677,14 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                     )}
                   </div>
                   <div
-                    className="lanes"
+                    className={`lanes${
+                      dragOverLaneId === initiative.id ? ' lanes--drop-target' : ''
+                    }`}
                     style={{ height: rowHeight, width: totalDays * pxPerDay }}
                     onPointerDown={handleLanePointerDown}
                     onClick={(e) => handleLaneClick(initiative, e)}
                     data-testid="lanes"
+                    data-initiative-id={initiative.id}
                   >
                     {months.slice(1).map((m) => (
                       <span
@@ -613,7 +739,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                           </div>
                         }
                         onOpen={() => openItem(item)}
-                        onCommitDates={(s, e) => commitItemDates(item, s, e)}
+                        onCommitDates={(s, e, drop) => commitItemDates(item, s, e, drop)}
+                        onDragMove={(x, y) => handleItemDragMove(item, x, y)}
                       />
                     ))}
                   </div>
@@ -670,6 +797,25 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         message={`"${roadmap.title}" will be permanently deleted. This will also delete ${items.length} roadmap item${items.length === 1 ? '' : 's'}, ${totalSprints} sprint item${totalSprints === 1 ? '' : 's'}, and its share list.`}
         busy={busy}
         onConfirm={deleteRoadmap}
+      />
+
+      <ConfirmModal
+        open={convertRequest !== null}
+        onOpenChange={(open) => !open && setConvertRequest(null)}
+        title="Convert initiative into an item?"
+        confirmLabel="Convert"
+        message={
+          convertRequest
+            ? (() => {
+                const n = items.filter(
+                  (i) => i.initiativeId === convertRequest.source.id,
+                ).length;
+                return `"${convertRequest.source.name}" will become a single item of "${convertRequest.target.name}". Its ${n} item${n === 1 ? '' : 's'} become sprint items of the new item.`;
+              })()
+            : ''
+        }
+        busy={busy}
+        onConfirm={confirmConvert}
       />
 
       <ConfirmModal

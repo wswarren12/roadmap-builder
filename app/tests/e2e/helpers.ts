@@ -123,8 +123,13 @@ export async function seedSprint(
   return (await res.json()).sprint.id;
 }
 
-/** Drag helper: pointer-drag from the center of a locator by dx pixels. */
-export async function dragBy(page: Page, locator: ReturnType<Page['locator']>, dx: number) {
+/** Drag helper: pointer-drag from the center of a locator by dx/dy pixels. */
+export async function dragBy(
+  page: Page,
+  locator: ReturnType<Page['locator']>,
+  dx: number,
+  dy = 0,
+) {
   const box = await locator.boundingBox();
   if (!box) throw new Error('drag target not visible');
   const x = box.x + box.width / 2;
@@ -132,7 +137,27 @@ export async function dragBy(page: Page, locator: ReturnType<Page['locator']>, d
   await page.mouse.move(x, y);
   await page.mouse.down();
   // several intermediate moves so the 4px threshold and previews engage
-  await page.mouse.move(x + dx / 3, y, { steps: 4 });
-  await page.mouse.move(x + dx, y, { steps: 6 });
+  await page.mouse.move(x + dx / 3, y + dy / 3, { steps: 4 });
+  await page.mouse.move(x + dx, y + dy, { steps: 6 });
+  await page.mouse.up();
+}
+
+/** Drag from the center of `source` to the center of `target`. */
+export async function dragOnto(
+  page: Page,
+  source: ReturnType<Page['locator']>,
+  target: ReturnType<Page['locator']>,
+) {
+  const from = await source.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error('drag source/target not visible');
+  const x = from.x + from.width / 2;
+  const y = from.y + from.height / 2;
+  const tx = to.x + to.width / 2;
+  const ty = to.y + to.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + (tx - x) / 3, y + (ty - y) / 3, { steps: 5 });
+  await page.mouse.move(tx, ty, { steps: 8 });
   await page.mouse.up();
 }

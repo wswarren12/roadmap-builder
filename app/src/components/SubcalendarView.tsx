@@ -189,6 +189,8 @@ export function SubcalendarView({
   }
 
   async function commitSprintDates(sprint: SprintItem, startDate: string, endDate: string) {
+    // A purely vertical drag commits unchanged dates — nothing to save.
+    if (startDate === sprint.startDate && endDate === sprint.endDate) return true;
     const prev = data!.sprints;
     setData((d) =>
       d

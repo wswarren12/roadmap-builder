@@ -31,6 +31,7 @@ export function Bar({
   enterIndex = 0,
   onOpen,
   onCommitDates,
+  onDragMove,
 }: {
   testId: string;
   entityId: string;
@@ -52,7 +53,12 @@ export function Bar({
   tooltip: React.ReactNode;
   enterIndex?: number;
   onOpen: () => void;
-  onCommitDates: (startDate: string, endDate: string) => Promise<boolean>;
+  onCommitDates: (
+    startDate: string,
+    endDate: string,
+    drop: { x: number; y: number },
+  ) => Promise<boolean>;
+  onDragMove?: (x: number, y: number) => void;
 }) {
   const { onPointerDown, preview, dragging } = useBarDrag({
     enabled: editable,
@@ -63,6 +69,7 @@ export function Bar({
     clampEnd,
     onCommit: onCommitDates,
     onClick: onOpen,
+    onDragMove,
   });
 
   const shownStart = preview?.startDate ?? startDate;
