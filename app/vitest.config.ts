@@ -2,8 +2,18 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 
+/** Mirror of the Next.js webpack rule: import .md files as raw strings. */
+const mdAsString = () => ({
+  name: 'md-as-string',
+  transform(src: string, id: string) {
+    if (id.endsWith('.md')) {
+      return { code: `export default ${JSON.stringify(src)};`, map: null };
+    }
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), mdAsString()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

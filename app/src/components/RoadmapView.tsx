@@ -22,6 +22,7 @@ import type { Initiative, ItemStatus, Roadmap, Role, RoadmapItem, TeamMember } f
 import { MAX_INITIATIVES } from '@/lib/validate';
 import { ApiError, api } from '@/lib/client/api';
 import { exportRoadmapPdf } from '@/lib/client/pdf';
+import { AgentChat } from './AgentChat';
 import { Bar } from './Bar';
 import { ConfirmModal } from './ConfirmModal';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
@@ -871,6 +872,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         editable={editable}
         onChanged={setTeam}
       />
+
+      {editable && <AgentChat roadmapId={roadmap.id} onActionsApplied={load} />}
 
       <ConfirmModal
         open={deletingRoadmap}

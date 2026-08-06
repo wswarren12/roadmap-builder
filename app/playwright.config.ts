@@ -18,7 +18,8 @@ export default defineConfig({
   webServer: {
     // Blank the Supabase vars: .env.local would otherwise point `next start`
     // at the real database — e2e must run on the in-memory store.
-    command: `PORT=${PORT} DEV_AUTH=1 SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= npm run start`,
+    // ANTHROPIC_MOCK drives the planning agent deterministically (no network).
+    command: `PORT=${PORT} DEV_AUTH=1 ANTHROPIC_MOCK=1 SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= npm run start`,
     url: `http://127.0.0.1:${PORT}/health`,
     reuseExistingServer: true,
     timeout: 60_000,

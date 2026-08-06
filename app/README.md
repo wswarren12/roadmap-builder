@@ -26,6 +26,15 @@ DEV_AUTH=1 npm run dev        # http://localhost:3000 as "Dev Owner"
 |---|---|
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-side only; never shipped to the client) |
+| `ANTHROPIC_API_KEY` | Powers the planning-agent chat (F-14). Without it the agent endpoint returns a friendly 503 and the rest of the app works normally. |
+
+**Planning agent (F-14):** editors get a floating chat bubble on the roadmap.
+The agent (Claude, via the Anthropic API) is scope-limited to roadmap/sprint
+planning: it prioritizes with ICE/RICE, sequences dependencies-first in
+Now/Next/Later horizons, researches competitor feature gaps via web search,
+and applies changes through validated create/update tools (no deletes). Its
+system prompt lives in `src/lib/agent/agent.md` (bundled at build time).
+Local dev and e2e run with `ANTHROPIC_MOCK=1`, a deterministic offline stand-in.
 
 Apply `supabase/migrations/001_init.sql` to the Supabase project once before
 the first deploy. Authorization is enforced in the API layer (owner /
