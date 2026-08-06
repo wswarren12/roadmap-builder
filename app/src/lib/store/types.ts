@@ -9,6 +9,7 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  TeamMember,
   UserState,
 } from '../types';
 
@@ -76,6 +77,19 @@ export interface Store {
   setShareRole(id: string, role: ShareRole): Promise<void>;
   listRoadmapsSharedWithUid(memberUid: string): Promise<Roadmap[]>;
   removeShare(id: string): Promise<void>;
+
+  // team roster (F-13)
+  listTeamMembers(roadmapId: string): Promise<TeamMember[]>;
+  getTeamMember(id: string): Promise<TeamMember | null>;
+  addTeamMember(
+    roadmapId: string,
+    input: { name: string; memberUid?: string | null; image?: string | null },
+  ): Promise<TeamMember>;
+  updateTeamMember(
+    id: string,
+    patch: Partial<Pick<TeamMember, 'name' | 'image'>>,
+  ): Promise<TeamMember>;
+  removeTeamMember(id: string): Promise<void>;
 
   // invite links (one active token per roadmap per role; null = disabled)
   getInviteTokens(roadmapId: string): Promise<InviteTokens>;

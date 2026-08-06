@@ -27,6 +27,7 @@ export function SprintFormModal({
   item,
   initial,
   editing,
+  driSuggestions = [],
   onSave,
 }: {
   open: boolean;
@@ -34,6 +35,8 @@ export function SprintFormModal({
   item: RoadmapItem;
   initial?: Partial<SprintFormValues>;
   editing?: SprintItem;
+  /** Team roster names offered while typing the DRI (F-13). */
+  driSuggestions?: string[];
   onSave: (values: SprintFormValues) => Promise<void>;
 }) {
   const source = editing ?? initial;
@@ -161,8 +164,14 @@ export function SprintFormModal({
           label="DRI"
           value={values.dri}
           onChange={(e) => set('dri', e.target.value)}
+          list="sprint-dri-suggestions"
           fullWidth
         />
+        <datalist id="sprint-dri-suggestions">
+          {driSuggestions.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
       </div>
       {error && !error.field && <span className="range-error">{error.message}</span>}
     </Modal>

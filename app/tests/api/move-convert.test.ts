@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { POST as convertInitiative } from '@/app/api/initiatives/[id]/convert/route';
 import { POST as convertItem } from '@/app/api/items/[id]/convert/route';
+import { POST as promoteSprint } from '@/app/api/sprints/[id]/promote/route';
 import { POST as postInitiative } from '@/app/api/roadmaps/[id]/initiatives/route';
 import { POST as postItem } from '@/app/api/roadmaps/[id]/items/route';
 import { PATCH as patchItem } from '@/app/api/items/[id]/route';
@@ -23,6 +24,13 @@ import { EDITOR, OWNER, VIEWER, freshStore, reqAs, seedRoadmap } from './harness
  * - Given target == source or a target on another roadmap, Then 400
  *   (AC-11.2).
  * - Given a viewer, Then 403; editors may convert (AC-11.3).
+ *
+ * Promote a sprint item to a roadmap item (F-12):
+ * - Given item P (initiative A) with sprint S, When S is promoted, Then S
+ *   is deleted and a new item exists in A with S's fields mapped across
+ *   (name→title, dri→dris, dates/milestone/kpi carried, status green)
+ *   (AC-12.1).
+ * - Given a viewer, Then 403; editors may promote (AC-12.2).
  *
  * Convert initiative into an item (F-10):
  * - Given initiative A with items, When converted into B, Then A is deleted,
@@ -195,6 +203,60 @@ describe('convert item into a sprint of another item (F-11)', () => {
       { params: { id: item.id } },
     );
     expect(allowed.status).toBe(201);
+  });
+});
+
+describe('promote a sprint item to a roadmap item (F-12)', () => {
+  it('creates an item in the parent\'s initiative with mapped fields and removes the sprint (AC-12.1)', async () => {
+    const { roadmap, initiative, item, sprint } = await seedRoadmap(store);
+    await store.updateSprint(sprint.id, {
+      description: 'CI hardening',
+      milestoneText: 'Green pipeline',
+      milestoneDate: '2026-08-10',
+      kpi: 'Zero flakes',
+      dri: 'Grace',
+    });
+
+    const res = await promoteSprint(reqAs(OWNER, 'POST'), { params: { id: sprint.id } });
+    expect(res.status).toBe(201);
+    const { item: promoted } = await res.json();
+
+    expect(promoted.initiativeId).toBe(initiative.id); // same initiative as the parent
+    expect(promoted.roadmapId).toBe(roadmap.id);
+    expect(promoted.title).toBe('Sprint 1');
+    expect(promoted.description).toBe('CI hardening');
+    expect(promoted.startDate).toBe('2026-08-03');
+    expect(promoted.endDate).toBe('2026-08-14');
+    expect(promoted.milestoneText).toBe('Green pipeline');
+    expect(promoted.milestoneDate).toBe('2026-08-10');
+    expect(promoted.kpi).toBe('Zero flakes');
+    expect(promoted.dris).toBe('Grace'); // sprint dri maps to item dris
+    expect(promoted.status).toBe('green');
+    expect(promoted.sprintCount).toBe(0);
+
+    // the sprint is gone from its former parent; the parent survives
+    expect(await store.getSprint(sprint.id)).toBeNull();
+    expect(await store.countSprints(item.id)).toBe(0);
+    expect(await store.getItem(item.id)).not.toBeNull();
+    expect(await store.countItems(roadmap.id)).toBe(2);
+  });
+
+  it('404s on an unknown sprint', async () => {
+    await seedRoadmap(store);
+    const res = await promoteSprint(reqAs(OWNER, 'POST'), { params: { id: 'nope' } });
+    expect(res.status).toBe(404);
+  });
+
+  it('viewers cannot promote; editors can (AC-12.2)', async () => {
+    const { sprint } = await seedRoadmap(store);
+
+    const denied = await promoteSprint(reqAs(VIEWER, 'POST'), { params: { id: sprint.id } });
+    expect(denied.status).toBe(403);
+    expect(await store.getSprint(sprint.id)).not.toBeNull();
+
+    const allowed = await promoteSprint(reqAs(EDITOR, 'POST'), { params: { id: sprint.id } });
+    expect(allowed.status).toBe(201);
+    expect(await store.getSprint(sprint.id)).toBeNull();
   });
 });
 

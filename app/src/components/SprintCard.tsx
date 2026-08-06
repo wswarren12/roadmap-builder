@@ -15,12 +15,15 @@ export function SprintCard({
   onOpenChange,
   onEdit,
   onDelete,
+  onPromote,
 }: {
   sprint: SprintItem | null;
   editable: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (sprint: SprintItem) => void;
   onDelete: (sprint: SprintItem) => void;
+  /** Promote to a roadmap item in the parent's initiative (F-12). */
+  onPromote: (sprint: SprintItem) => void;
 }) {
   return (
     <Drawer open={sprint !== null} onOpenChange={onOpenChange} side="right" size="sm">
@@ -63,6 +66,14 @@ export function SprintCard({
           </DrawerBody>
           {editable && (
             <DrawerFooter>
+              <Button
+                variant="secondary"
+                styleType="border"
+                onClick={() => onPromote(sprint)}
+                data-testid="sprint-card-promote"
+              >
+                Promote to item
+              </Button>
               <Button
                 variant="secondary"
                 styleType="border"

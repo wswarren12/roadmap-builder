@@ -30,6 +30,7 @@ describe('SprintCard (AC-4.3, AC-4.5)', () => {
         onOpenChange={() => {}}
         onEdit={() => {}}
         onDelete={() => {}}
+        onPromote={() => {}}
       />,
     );
     expect(screen.getByText('Sprint 1 — API scaffolding')).toBeTruthy();
@@ -40,9 +41,10 @@ describe('SprintCard (AC-4.3, AC-4.5)', () => {
     expect(screen.getByText('Ada')).toBeTruthy();
     expect(screen.getByTestId('sprint-card-edit')).toBeTruthy();
     expect(screen.getByTestId('sprint-card-delete')).toBeTruthy();
+    expect(screen.getByTestId('sprint-card-promote')).toBeTruthy();
   });
 
-  it('hides edit/delete for viewers', () => {
+  it('hides edit/delete/promote for viewers', () => {
     render(
       <SprintCard
         sprint={sprint}
@@ -50,9 +52,11 @@ describe('SprintCard (AC-4.3, AC-4.5)', () => {
         onOpenChange={() => {}}
         onEdit={() => {}}
         onDelete={() => {}}
+        onPromote={() => {}}
       />,
     );
     expect(screen.queryByTestId('sprint-card-edit')).toBeNull();
     expect(screen.queryByTestId('sprint-card-delete')).toBeNull();
+    expect(screen.queryByTestId('sprint-card-promote')).toBeNull();
   });
 });

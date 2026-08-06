@@ -77,6 +77,7 @@ function devIdentity(cookies: Record<string, string>): Identity | null {
         typeof parsed.email === 'string' && parsed.email
           ? parsed.email.toLowerCase()
           : null,
+      image: typeof parsed.image === 'string' && parsed.image ? parsed.image : null,
     };
   } catch {
     return null;
@@ -108,6 +109,7 @@ async function labosIdentity(cookies: Record<string, string>): Promise<Identity 
         typeof member.email === 'string' && member.email
           ? member.email.toLowerCase()
           : null,
+      image: typeof member.image === 'string' && member.image ? member.image : null,
     };
     authCache().set(token, { identity, expires: Date.now() + CACHE_TTL_MS });
     return identity;

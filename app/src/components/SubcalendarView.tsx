@@ -17,7 +17,8 @@ import {
   weekColumns,
 } from '@/lib/dates';
 import { assignLanes } from '@/lib/stacking';
-import type { Roadmap, RoadmapItem, Role, SprintItem } from '@/lib/types';
+import { driAvatars } from '@/lib/team';
+import type { Roadmap, RoadmapItem, Role, SprintItem, TeamMember } from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
 import { exportItemPdf } from '@/lib/client/pdf';
 import { Bar } from './Bar';
@@ -69,7 +70,9 @@ export function SubcalendarView({
     editing?: SprintItem;
   } | null>(null);
   const [openSprintId, setOpenSprintId] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [deletingSprint, setDeletingSprint] = useState<SprintItem | null>(null);
+  const [promotingSprint, setPromotingSprint] = useState<SprintItem | null>(null);
   const [editingItem, setEditingItem] = useState(false);
   const [deletingItem, setDeletingItem] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,6 +83,10 @@ export function SubcalendarView({
       const res = await api<ItemData>(`/api/items/${itemId}`);
       setData(res);
       setState('ok');
+      // Roster loads best-effort alongside — bars fall back to initials.
+      api<{ members: TeamMember[] }>(`/api/roadmaps/${roadmapId}/team`)
+        .then((r) => setTeam(r.members))
+        .catch(() => {});
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 401) return setState('signedout');
@@ -88,7 +95,7 @@ export function SubcalendarView({
       }
       setState('error');
     }
-  }, [itemId]);
+  }, [itemId, roadmapId]);
 
   useEffect(() => {
     load();
@@ -232,6 +239,27 @@ export function SubcalendarView({
       setDeletingSprint(null);
     } catch {
       toast('error', 'Delete failed — please retry');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmPromoteSprint() {
+    if (!promotingSprint) return;
+    setBusy(true);
+    try {
+      await api(`/api/sprints/${promotingSprint.id}/promote`, { method: 'POST' });
+      toast(
+        'success',
+        `"${promotingSprint.name}" is now a roadmap item in this initiative`,
+      );
+      setData((d) =>
+        d ? { ...d, sprints: d.sprints.filter((s) => s.id !== promotingSprint.id) } : d,
+      );
+      setOpenSprintId(null);
+      setPromotingSprint(null);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Promote failed — please retry');
     } finally {
       setBusy(false);
     }
@@ -461,6 +489,7 @@ export function SubcalendarView({
                     }
                     onOpen={() => setOpenSprintId(sprint.id)}
                     onCommitDates={(s, e) => commitSprintDates(sprint, s, e)}
+                    avatars={driAvatars(sprint.dri, team)}
                   />
                 ))}
               </div>
@@ -478,6 +507,7 @@ export function SubcalendarView({
           setSprintForm({ editing: sprint });
         }}
         onDelete={(sprint) => setDeletingSprint(sprint)}
+        onPromote={(sprint) => setPromotingSprint(sprint)}
       />
 
       {sprintForm && (
@@ -487,6 +517,7 @@ export function SubcalendarView({
           item={item}
           initial={sprintForm.initial}
           editing={sprintForm.editing}
+          driSuggestions={team.map((m) => m.name)}
           onSave={async (values) => {
             await saveSprint(values, sprintForm.editing);
             setSprintForm(null);
@@ -504,6 +535,20 @@ export function SubcalendarView({
           onSave={saveItemEdit}
         />
       )}
+
+      <ConfirmModal
+        open={promotingSprint !== null}
+        onOpenChange={(open) => !open && setPromotingSprint(null)}
+        title="Promote to a roadmap item?"
+        confirmLabel="Promote"
+        message={
+          promotingSprint
+            ? `"${promotingSprint.name}" will leave "${item.title}" and become a full roadmap item in the "${initiativeName}" initiative, keeping its dates, milestone, KPI, and DRI.`
+            : ''
+        }
+        busy={busy}
+        onConfirm={confirmPromoteSprint}
+      />
 
       <ConfirmModal
         open={deletingSprint !== null}

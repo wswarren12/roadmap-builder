@@ -10,6 +10,7 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  TeamMember,
   UserState,
 } from '../types';
 import type { Store } from './types';
@@ -75,6 +76,17 @@ function mapSprint(r: any): SprintItem {
     dri: r.dri ?? '',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+function mapTeamMember(r: any): TeamMember {
+  return {
+    id: r.id,
+    roadmapId: r.roadmap_id,
+    memberUid: r.member_uid,
+    name: r.name,
+    image: r.image,
+    createdAt: r.created_at,
   };
 }
 
@@ -447,6 +459,61 @@ export class SupabaseStore implements Store {
 
   async removeShare(id: string) {
     const { error } = await this.sb.from('roadmap_shares').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async listTeamMembers(roadmapId: string) {
+    const { data, error } = await this.sb
+      .from('roadmap_team_members')
+      .select('*')
+      .eq('roadmap_id', roadmapId)
+      .order('created_at');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapTeamMember);
+  }
+
+  async getTeamMember(id: string) {
+    const { data, error } = await this.sb
+      .from('roadmap_team_members')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapTeamMember(data) : null;
+  }
+
+  async addTeamMember(
+    roadmapId: string,
+    input: { name: string; memberUid?: string | null; image?: string | null },
+  ) {
+    const res = await this.sb
+      .from('roadmap_team_members')
+      .insert({
+        roadmap_id: roadmapId,
+        member_uid: input.memberUid ?? null,
+        name: input.name,
+        image: input.image ?? null,
+      })
+      .select()
+      .single();
+    return mapTeamMember(unwrap(res));
+  }
+
+  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image'>>) {
+    const row: Record<string, unknown> = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.image !== undefined) row.image = patch.image;
+    const res = await this.sb
+      .from('roadmap_team_members')
+      .update(row)
+      .eq('id', id)
+      .select()
+      .single();
+    return mapTeamMember(unwrap(res));
+  }
+
+  async removeTeamMember(id: string) {
+    const { error } = await this.sb.from('roadmap_team_members').delete().eq('id', id);
     if (error) throw new Error(error.message);
   }
 

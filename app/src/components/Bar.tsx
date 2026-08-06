@@ -2,6 +2,8 @@
 
 import { Tooltip } from '@pl/components/Tooltip';
 import { daysBetween } from '@/lib/dates';
+import type { DriAvatar } from '@/lib/team';
+import { Avatar } from './Avatar';
 import { useBarDrag } from './useBarDrag';
 
 /**
@@ -30,6 +32,7 @@ export function Bar({
   tooltip,
   enterIndex = 0,
   dropTarget = false,
+  avatars = [],
   onOpen,
   onCommitDates,
   onDragMove,
@@ -55,6 +58,8 @@ export function Bar({
   enterIndex?: number;
   /** Highlighted as the drop target of a convert-to-sprint drag (F-11). */
   dropTarget?: boolean;
+  /** DRI avatars rendered at the bar's end — image or initials (F-13). */
+  avatars?: DriAvatar[];
   onOpen: () => void;
   onCommitDates: (
     startDate: string,
@@ -111,6 +116,13 @@ export function Bar({
     >
       {statusColor && <span className="status-dot" style={{ background: statusColor }} />}
       <span className="bar-title">{title}</span>
+      {avatars.length > 0 && width >= 64 && (
+        <span className="bar-avatars" data-testid={`${testId}-avatars`}>
+          {avatars.slice(0, 3).map((a) => (
+            <Avatar key={a.name} name={a.name} image={a.image} size={20} testId="bar-avatar" />
+          ))}
+        </span>
+      )}
       {milestoneVisible && (
         <span
           className="milestone-diamond"

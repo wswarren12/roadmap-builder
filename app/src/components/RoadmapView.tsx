@@ -17,7 +17,8 @@ import {
   todayISO,
 } from '@/lib/dates';
 import { assignLanes } from '@/lib/stacking';
-import type { Initiative, ItemStatus, Roadmap, Role, RoadmapItem } from '@/lib/types';
+import { driAvatars } from '@/lib/team';
+import type { Initiative, ItemStatus, Roadmap, Role, RoadmapItem, TeamMember } from '@/lib/types';
 import { MAX_INITIATIVES } from '@/lib/validate';
 import { ApiError, api } from '@/lib/client/api';
 import { exportRoadmapPdf } from '@/lib/client/pdf';
@@ -26,6 +27,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
 import { SharePanel } from './SharePanel';
 import { SignedOutLanding } from './SignedOutLanding';
+import { TeamPanel } from './TeamPanel';
 import { useToast } from './Toasts';
 
 const LANE_H = 34;
@@ -58,6 +60,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     editing?: ItemWithCount;
   } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [deletingRoadmap, setDeletingRoadmap] = useState(false);
   const [deletingInitiative, setDeletingInitiative] = useState<Initiative | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,6 +88,10 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       const res = await api<RoadmapData>(`/api/roadmaps/${roadmapId}`);
       setData(res);
       setState('ok');
+      // Roster loads best-effort alongside — bars fall back to initials.
+      api<{ members: TeamMember[] }>(`/api/roadmaps/${roadmapId}/team`)
+        .then((r) => setTeam(r.members))
+        .catch(() => {});
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 401) return setState('signedout');
@@ -543,6 +551,16 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             }}
           />
           <div className="header-actions">
+            {editable && (
+              <Button
+                variant="secondary"
+                styleType="border"
+                onClick={() => setTeamOpen(true)}
+                data-testid="team-button"
+              >
+                Team
+              </Button>
+            )}
             {isOwner && (
               <Button
                 variant="secondary"
@@ -795,6 +813,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         onCommitDates={(s, e, drop) => commitItemDates(item, s, e, drop)}
                         onDragMove={(x, y) => handleItemDragMove(item, x, y)}
                         dropTarget={dragOverBarId === item.id}
+                        avatars={driAvatars(item.dris, team)}
                       />
                     ))}
                   </div>
@@ -833,6 +852,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
           initiatives={initiatives}
           initial={itemForm.initial}
           editing={itemForm.editing}
+          driSuggestions={team.map((m) => m.name)}
           onSave={async (values) => {
             await saveItem(values, itemForm.editing);
             setItemForm(null);
@@ -843,6 +863,14 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       {isOwner && (
         <SharePanel open={shareOpen} onOpenChange={setShareOpen} roadmapId={roadmap.id} />
       )}
+
+      <TeamPanel
+        open={teamOpen}
+        onOpenChange={setTeamOpen}
+        roadmapId={roadmap.id}
+        editable={editable}
+        onChanged={setTeam}
+      />
 
       <ConfirmModal
         open={deletingRoadmap}

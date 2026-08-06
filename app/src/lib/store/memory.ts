@@ -10,6 +10,7 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  TeamMember,
   UserState,
 } from '../types';
 import type { Store } from './types';
@@ -24,6 +25,7 @@ interface Db {
   items: Map<string, RoadmapItem>;
   sprints: Map<string, SprintItem>;
   shares: Map<string, RoadmapShare>;
+  teamMembers: Map<string, TeamMember>;
   userState: Map<string, UserState>;
   inviteTokens: Map<string, InviteTokens>; // roadmapId → per-role tokens
 }
@@ -35,6 +37,7 @@ function emptyDb(): Db {
     items: new Map(),
     sprints: new Map(),
     shares: new Map(),
+    teamMembers: new Map(),
     userState: new Map(),
     inviteTokens: new Map(),
   };
@@ -112,6 +115,9 @@ export class MemoryStore implements Store {
     }
     for (const [shid, sh] of this.db.shares) {
       if (sh.roadmapId === id) this.db.shares.delete(shid);
+    }
+    for (const [tmid, tm] of this.db.teamMembers) {
+      if (tm.roadmapId === id) this.db.teamMembers.delete(tmid);
     }
     this.db.inviteTokens.delete(id);
     for (const [uid, st] of this.db.userState) {
@@ -344,6 +350,44 @@ export class MemoryStore implements Store {
 
   async removeShare(id: string) {
     this.db.shares.delete(id);
+  }
+
+  async listTeamMembers(roadmapId: string) {
+    return [...this.db.teamMembers.values()]
+      .filter((m) => m.roadmapId === roadmapId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name));
+  }
+
+  async getTeamMember(id: string) {
+    return this.db.teamMembers.get(id) ?? null;
+  }
+
+  async addTeamMember(
+    roadmapId: string,
+    input: { name: string; memberUid?: string | null; image?: string | null },
+  ) {
+    const member: TeamMember = {
+      id: randomUUID(),
+      roadmapId,
+      memberUid: input.memberUid ?? null,
+      name: input.name,
+      image: input.image ?? null,
+      createdAt: now(),
+    };
+    this.db.teamMembers.set(member.id, member);
+    return member;
+  }
+
+  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image'>>) {
+    const m = this.db.teamMembers.get(id);
+    if (!m) throw new Error('team member not found');
+    const updated = { ...m, ...patch };
+    this.db.teamMembers.set(id, updated);
+    return updated;
+  }
+
+  async removeTeamMember(id: string) {
+    this.db.teamMembers.delete(id);
   }
 
   async getInviteTokens(roadmapId: string): Promise<InviteTokens> {

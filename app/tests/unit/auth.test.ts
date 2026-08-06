@@ -30,7 +30,7 @@ describe('DEV_AUTH identity (local/E2E shim)', () => {
     const identity = await resolveIdentity(
       req(devCookie({ uid: 'u1', name: 'Ada', email: 'Ada@PL.Network' })),
     );
-    expect(identity).toEqual({ uid: 'u1', name: 'Ada', email: 'ada@pl.network' });
+    expect(identity).toEqual({ uid: 'u1', name: 'Ada', email: 'ada@pl.network', image: null });
   });
 
   it('falls back to the first roster user (Dev One) without a cookie', async () => {
@@ -55,7 +55,7 @@ describe('DEV_AUTH identity (local/E2E shim)', () => {
       dev_user: encodeURIComponent(JSON.stringify({ uid: 'u2', name: 'Grace', email: null })),
     };
     const identity = await resolveIdentityFromCookies((name) => jar[name]);
-    expect(identity).toEqual({ uid: 'u2', name: 'Grace', email: null });
+    expect(identity).toEqual({ uid: 'u2', name: 'Grace', email: null, image: null });
   });
 });
 
@@ -87,7 +87,7 @@ describe('LabOS identity (production path)', () => {
     });
 
     const identity = await resolveIdentity(req('authToken=%22tok-abc%22'));
-    expect(identity).toEqual({ uid: 'm-1', name: 'Ada Lovelace', email: null });
+    expect(identity).toEqual({ uid: 'm-1', name: 'Ada Lovelace', email: null, image: null });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain('/v1/ai-apps/me');

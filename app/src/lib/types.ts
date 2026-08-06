@@ -8,6 +8,8 @@ export interface Identity {
   /** LabOS-verified email, lowercase. May be null — the v1.4 member-context
    *  API does not expose email; sharing falls back gracefully (see README). */
   email: string | null;
+  /** LabOS profile image URL, when the member context provides one (F-13). */
+  image?: string | null;
 }
 
 export interface Roadmap {
@@ -87,6 +89,20 @@ export interface RoadmapShare {
   memberUid: string | null;
   memberName: string | null;
   role: ShareRole;
+  createdAt: string;
+}
+
+/**
+ * A person on the roadmap's team roster (F-13). LabOS members carry their
+ * member uid (and profile image once captured from their own member context);
+ * manually added people have neither and render an initials avatar.
+ */
+export interface TeamMember {
+  id: string;
+  roadmapId: string;
+  memberUid: string | null;
+  name: string;
+  image: string | null;
   createdAt: string;
 }
 

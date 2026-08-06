@@ -21,6 +21,11 @@ import {
  * and Y's drill-down lists X and X's former sprint as sprint items;
  * cancelling changes nothing.
  *
+ * F-12: Given item P (initiative A) with sprint S, When S's card's
+ * "Promote to item" is confirmed, Then S leaves P's drill-down and appears
+ * on the roadmap as a full item in initiative A with its fields carried;
+ * cancelling changes nothing.
+ *
  * F-10: Given initiative A with an item (that has a sprint), When A's drag
  * handle is dropped onto initiative B, Then a confirm dialog explains the
  * conversion; cancelling changes nothing (AC-10.5), confirming replaces A
@@ -112,6 +117,49 @@ test.describe('drag across initiatives', () => {
     await expect(
       page.getByTestId('sprint-bar').filter({ hasText: 'Signup revamp' }),
     ).toHaveCount(1);
+  });
+
+  test('sprint promoted from its card becomes an item in the parent initiative; cancel is a no-op (AC-12.1)', async ({
+    page,
+    context,
+    request,
+  }) => {
+    const owner = makeUser('owner');
+    await loginAs(context, owner);
+    const seeded = await seedRoadmap(request, owner);
+    const itemId = await seedItem(request, owner, seeded);
+    await seedSprint(request, owner, itemId, { name: 'CI hardening', dri: 'Grace' });
+
+    await page.goto(`/roadmaps/${seeded.roadmapId}/items/${itemId}`);
+    const sprintBar = page.getByTestId('sprint-bar');
+    await expect(sprintBar).toHaveCount(1);
+
+    // cancel path — sprint stays, card drawer stays open behind the modal
+    await sprintBar.click();
+    await page.getByTestId('sprint-card-promote').click();
+    await expect(page.locator('.confirm-message')).toContainText(
+      /"CI hardening" will leave "Signup revamp"/,
+    );
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    // wait for the modal to fully unmount before re-triggering it (Radix
+    // swallows a reopen dispatched during the exit animation)
+    await expect(page.locator('.confirm-message')).toHaveCount(0);
+    await expect(page.getByTestId('sprint-card')).toBeVisible();
+    await expect(sprintBar).toHaveCount(1);
+
+    // confirm path — same open card, sprint leaves the drill-down…
+    await page.getByTestId('sprint-card-promote').click();
+    await page.getByTestId('confirm-delete').click();
+    await expect(sprintBar).toHaveCount(0);
+
+    // …and is a full item on the roadmap, in the same initiative row
+    await page.goto(`/roadmaps/${seeded.roadmapId}`);
+    const bars = page.getByTestId('initiative-row').first().getByTestId('item-bar');
+    await expect(bars).toHaveCount(2);
+    const promoted = bars.filter({ hasText: 'CI hardening' });
+    await expect(promoted).toHaveCount(1);
+    await expect(promoted).toHaveAttribute('data-start', '2026-08-03');
+    await expect(promoted).toHaveAttribute('data-end', '2026-08-14');
   });
 
   test('initiative dragged onto another converts to an item after confirm; cancel is a no-op (AC-10.1, AC-10.5)', async ({

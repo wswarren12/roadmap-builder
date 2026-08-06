@@ -576,6 +576,95 @@
   pointer-events: none;
 }
 
+// ─── Avatars (F-13) ──────────────────────────────────────────────────────────
+
+.avatar-chip {
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-neutral-normal);
+  color: var(--foreground-neutral-secondary);
+  font-weight: 600;
+  user-select: none;
+}
+
+.bar-avatars {
+  display: inline-flex;
+  flex-shrink: 0;
+  pointer-events: none;
+
+  .avatar-chip {
+    border: 1px solid var(--border-light-normal, #fff);
+
+    &:not(:first-child) {
+      margin-left: -6px;
+    }
+  }
+}
+
+.team-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.team-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+}
+
+.team-blurb {
+  @include pl.body-xs;
+  color: var(--foreground-neutral-tertiary);
+  margin: 0;
+}
+
+.team-add-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  width: 100%;
+  align-items: center;
+}
+
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.team-name {
+  @include pl.body-sm;
+  color: var(--foreground-neutral-primary);
+  flex: 1;
+}
+
+.team-tag {
+  @include pl.label-xs;
+  color: var(--foreground-neutral-quaternary);
+  border: 1px solid var(--border-neutral-xsubtle);
+  border-radius: var(--radius-full);
+  padding: 0 var(--spacing-xs);
+}
+
+.team-empty {
+  @include pl.body-xs;
+  color: var(--foreground-neutral-quaternary);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

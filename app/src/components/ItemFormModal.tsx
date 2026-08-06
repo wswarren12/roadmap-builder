@@ -37,12 +37,15 @@ export function ItemFormModal({
   initiatives,
   initial,
   editing,
+  driSuggestions = [],
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roadmap: Roadmap;
   initiatives: Initiative[];
+  /** Team roster names offered while typing DRIs (F-13). */
+  driSuggestions?: string[];
   initial?: Partial<ItemFormValues>;
   editing?: RoadmapItem;
   onSave: (values: ItemFormValues) => Promise<void>;
@@ -194,8 +197,14 @@ export function ItemFormModal({
           value={values.dris}
           onChange={(e) => set('dris', e.target.value)}
           placeholder="Who's responsible"
+          list="dri-suggestions"
           fullWidth
         />
+        <datalist id="dri-suggestions">
+          {driSuggestions.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
         <Input
           label="KPI"
           value={values.kpi}
