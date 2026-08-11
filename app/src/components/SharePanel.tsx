@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { Drawer, DrawerBody, DrawerHeader } from '@pl/components/Drawer';
-import type { InviteTokens, RoadmapShare, ShareRole } from '@/lib/types';
+import { formatDate } from '@/lib/dates';
+import type {
+  AgentActivityEntry,
+  AgentLink,
+  AgentRole,
+  InviteTokens,
+  RoadmapShare,
+  ShareRole,
+} from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
 import { useToast } from './Toasts';
 
@@ -153,6 +161,176 @@ function InviteLinkSection({
   );
 }
 
+type AgentLinkWithActivity = AgentLink & { activity: AgentActivityEntry[] };
+
+const AGENT_ROLE_OPTIONS: Array<{ value: AgentRole; label: string }> = [
+  { value: 'agent_viewer', label: 'View only' },
+  { value: 'agent_suggester', label: 'Suggest changes (you approve)' },
+  { value: 'agent_editor', label: 'Edit directly' },
+];
+
+const AGENT_ROLE_LABEL: Record<AgentRole, string> = {
+  agent_viewer: 'Viewer',
+  agent_suggester: 'Suggester',
+  agent_editor: 'Editor',
+};
+
+/** "AI agents" section (agent-links design): named, individually revocable
+ *  /agent/<token> URLs an owner hands to AI agents. Suggester is the default —
+ *  agents propose, the owner approves in the suggestions panel. */
+function AgentLinksSection({
+  roadmapId,
+  links,
+  onLinks,
+}: {
+  roadmapId: string;
+  links: AgentLinkWithActivity[];
+  onLinks: (links: AgentLinkWithActivity[]) => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<AgentRole>('agent_suggester');
+  const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const active = links.filter((l) => !l.revokedAt);
+
+  async function create() {
+    if (!name.trim()) {
+      toast('warning', 'Give the agent link a name first');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api<{ link: AgentLink }>(`/api/roadmaps/${roadmapId}/agent-links`, {
+        method: 'POST',
+        body: { name: name.trim(), role },
+      });
+      onLinks([...links, { ...res.link, activity: [] }]);
+      setName('');
+      toast('success', 'Agent link created — copy the URL and give it to the agent');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Could not create the agent link');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(link: AgentLinkWithActivity) {
+    try {
+      await api(`/api/agent-links/${link.id}`, { method: 'DELETE' });
+      onLinks(links.filter((l) => l.id !== link.id));
+      toast('success', 'Link revoked — the agent can no longer access this roadmap');
+    } catch {
+      toast('error', 'Could not revoke — please retry');
+    }
+  }
+
+  async function copyUrl(link: AgentLinkWithActivity) {
+    const url = `${window.location.origin}/agent/${link.token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(link.id);
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      toast('warning', 'Copy failed — select the link text and copy it manually');
+    }
+  }
+
+  return (
+    <div className="sprint-card-fields" data-testid="agent-links-section">
+      <span className="detail-label">AI agents</span>
+      <p className="confirm-message">
+        Give an AI agent a link to review this roadmap or propose changes.
+        Suggestions wait for your approval.
+      </p>
+      <div className="share-add">
+        <input
+          className="input"
+          placeholder="Agent name, e.g. Hermes PM bot"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-testid="agent-link-name"
+        />
+        <select
+          className="input"
+          value={role}
+          onChange={(e) => setRole(e.target.value as AgentRole)}
+          data-testid="agent-link-role"
+          aria-label="Agent access level"
+        >
+          {AGENT_ROLE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="primary"
+          styleType="fill"
+          onClick={create}
+          loading={busy}
+          data-testid="agent-link-create"
+        >
+          Create link
+        </Button>
+      </div>
+      {active.length === 0 ? (
+        <span className="max-hint">No agent links yet.</span>
+      ) : (
+        active.map((link) => (
+          <div key={link.id} className="sprint-card-fields" data-testid="agent-link-row">
+            <div className="share-row">
+              <span>
+                {link.name}
+                <span className="max-hint" data-testid="agent-link-role-label">
+                  {' '}
+                  · {AGENT_ROLE_LABEL[link.role]} ·{' '}
+                  {link.lastUsedAt ? `last used ${formatDate(link.lastUsedAt.slice(0, 10))}` : 'never used'}
+                </span>
+              </span>
+              <span className="share-add">
+                <Button
+                  variant="secondary"
+                  styleType="border"
+                  size="xs"
+                  onClick={() => copyUrl(link)}
+                  data-testid="agent-link-copy"
+                >
+                  {copiedId === link.id ? 'Copied ✓' : 'Copy URL'}
+                </Button>
+                <Button
+                  variant="neutral"
+                  styleType="light"
+                  size="xs"
+                  onClick={() => revoke(link)}
+                  aria-label={`Revoke ${link.name}`}
+                  data-testid="agent-link-revoke"
+                >
+                  Revoke
+                </Button>
+              </span>
+            </div>
+            <span className="invite-link-text" data-testid="agent-link-url">
+              {`${typeof window === 'undefined' ? '' : window.location.origin}/agent/${link.token}`}
+            </span>
+            {link.activity.length > 0 ? (
+              <details>
+                <summary className="max-hint">Recent activity</summary>
+                {link.activity.map((a) => (
+                  <div key={a.id} className="max-hint" data-testid="agent-activity-row">
+                    {a.action} · {formatDate(a.createdAt.slice(0, 10))}
+                  </div>
+                ))}
+              </details>
+            ) : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 export function SharePanel({
   open,
   onOpenChange,
@@ -165,6 +343,7 @@ export function SharePanel({
   const toast = useToast();
   const [shares, setShares] = useState<RoadmapShare[] | null>(null);
   const [tokens, setTokens] = useState<InviteTokens>({ editor: null, viewer: null });
+  const [agentLinks, setAgentLinks] = useState<AgentLinkWithActivity[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -173,10 +352,12 @@ export function SharePanel({
     Promise.all([
       api<{ shares: RoadmapShare[] }>(`/api/roadmaps/${roadmapId}/shares`),
       api<{ tokens: InviteTokens }>(`/api/roadmaps/${roadmapId}/invite`),
+      api<{ links: AgentLinkWithActivity[] }>(`/api/roadmaps/${roadmapId}/agent-links`),
     ])
-      .then(([sharesRes, inviteRes]) => {
+      .then(([sharesRes, inviteRes, agentRes]) => {
         setShares(sharesRes.shares);
         setTokens(inviteRes.tokens);
+        setAgentLinks(agentRes.links);
         setLoaded(true);
       })
       .catch(() => {
@@ -221,6 +402,11 @@ export function SharePanel({
                 role="viewer"
                 token={tokens.viewer}
                 onToken={(t) => setTokens((prev) => ({ ...prev, viewer: t }))}
+              />
+              <AgentLinksSection
+                roadmapId={roadmapId}
+                links={agentLinks}
+                onLinks={setAgentLinks}
               />
             </>
           )}
