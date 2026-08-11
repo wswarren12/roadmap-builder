@@ -1,7 +1,7 @@
 # Agent Links — Permissioned AI-Agent Access to Roadmaps
 
 **Date:** 2026-08-05
-**Status:** Approved design, pre-implementation
+**Status:** Implemented (2026-08-11) — see `docs/superpowers/plans/2026-08-11-agent-links.md`
 
 ## Problem
 
@@ -117,6 +117,7 @@ the URL alone.
 ## Suggestions review (human side)
 
 - Roadmap header badge when pending suggestions exist ("3 suggestions").
+- Suggestions on the roadmap show up on a roadmap or sprint view as items with no fill and dotted borders
 - Panel: per card — agent name, kind, human-readable diff
   ("Move *API beta* end Jul 15 → Aug 1"), rationale, **Accept / Reject**.
 - Accept applies payload via existing store functions; owner/editor only;
