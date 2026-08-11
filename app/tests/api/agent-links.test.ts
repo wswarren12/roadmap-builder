@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EDITOR, OWNER, VIEWER, freshStore, json, reqAs, seedRoadmap } from './harness';
+import * as agentApi from '@/app/agent/[token]/api/[[...path]]/route';
 import { authorizeAgent } from '@/lib/api-helpers';
 import { AGENT_RATE_LIMIT, resetRateLimits } from '@/lib/agent-links/rate-limit';
 import type { MemoryStore } from '@/lib/store';
 import type { AgentRole } from '@/lib/types';
+
+function agentReq(method: string, body?: unknown) {
+  return new Request('http://test.local/agent/x/api', {
+    method,
+    headers: {
+      accept: 'application/json',
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+type Handler = (req: Request, ctx: { params: { token: string; path?: string[] } }) => Promise<Response>;
+const call = (fn: Handler, token: string, path: string[] | undefined, req: Request) =>
+  fn(req, { params: { token, path } });
 
 describe('agent-links store layer', () => {
   let store: MemoryStore;
@@ -117,5 +133,186 @@ describe('authorizeAgent', () => {
     const r = await authorizeAgent(link.token, 'read');
     expect((r as NextResponse).status).toBe(429);
     expect(await (r as NextResponse).clone().json()).toHaveProperty('retry_after');
+  });
+});
+
+describe('agent API', () => {
+  let store: MemoryStore;
+  beforeEach(() => {
+    store = freshStore();
+    resetRateLimits();
+  });
+
+  it('manifest is role-filtered', async () => {
+    const { roadmap } = await seedRoadmap(store);
+    await store.createAgentLink(roadmap.id, 'V', 'agent_viewer', 'tv');
+    await store.createAgentLink(roadmap.id, 'S', 'agent_suggester', 'ts');
+    await store.createAgentLink(roadmap.id, 'E', 'agent_editor', 'te');
+
+    const vm = await json(await call(agentApi.GET, 'tv', undefined, agentReq('GET')));
+    expect(vm.agent).toEqual({ name: 'V', role: 'agent_viewer' });
+    expect(vm.capabilities.read_roadmap).toBeDefined();
+    expect(vm.capabilities.create_suggestion).toBeUndefined();
+
+    const sm = await json(await call(agentApi.GET, 'ts', undefined, agentReq('GET')));
+    expect(sm.capabilities.create_suggestion).toBeDefined();
+    expect(sm.capabilities.update_item).toBeUndefined();
+
+    const em = await json(await call(agentApi.GET, 'te', undefined, agentReq('GET')));
+    expect(em.capabilities.update_item).toBeDefined();
+    expect(em.instructions).toContain('roadmap');
+  });
+
+  it('unknown/revoked token → 404; unknown path → 404', async () => {
+    const { roadmap } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'V', 'agent_viewer', 'tok');
+    expect((await call(agentApi.GET, 'nope', undefined, agentReq('GET'))).status).toBe(404);
+    expect((await call(agentApi.GET, 'tok', ['bogus'], agentReq('GET'))).status).toBe(404);
+    await store.revokeAgentLink(link.id);
+    expect((await call(agentApi.GET, 'tok', undefined, agentReq('GET'))).status).toBe(404);
+  });
+
+  it('GET roadmap returns full payload and logs activity', async () => {
+    const { roadmap, item } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'V', 'agent_viewer', 'tok');
+    const body = await json(await call(agentApi.GET, 'tok', ['roadmap'], agentReq('GET')));
+    expect(body.roadmap.title).toBe(roadmap.title);
+    expect(body.items[0].id).toBe(item.id);
+    expect(body.items[0].sprints).toHaveLength(1);
+    const acts = await store.listAgentActivity(link.id, 10);
+    expect(acts[0].action).toBe('read');
+    expect(JSON.stringify(acts)).not.toContain('tok');
+  });
+
+  it('files a valid suggestion; rejects malformed at filing; enforces pending cap', async () => {
+    const { roadmap, item } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'S', 'agent_suggester', 'ts');
+
+    const ok = await call(
+      agentApi.POST,
+      'ts',
+      ['suggestions'],
+      agentReq('POST', {
+        kind: 'update_item',
+        target_id: item.id,
+        payload: { endDate: '2026-10-01' },
+        rationale: 'push out',
+      }),
+    );
+    expect(ok.status).toBe(201);
+    expect((await store.getItem(item.id))!.endDate).toBe('2026-09-15'); // unchanged until accepted
+
+    const bad = await call(
+      agentApi.POST,
+      'ts',
+      ['suggestions'],
+      agentReq('POST', {
+        kind: 'update_item',
+        target_id: item.id,
+        payload: { endDate: '2027-06-01' },
+        rationale: 'x',
+      }),
+    );
+    expect(bad.status).toBe(400);
+    const noRationale = await call(
+      agentApi.POST,
+      'ts',
+      ['suggestions'],
+      agentReq('POST', { kind: 'comment', payload: {} }),
+    );
+    expect(noRationale.status).toBe(400);
+
+    for (let i = 0; i < 19; i++) {
+      await store.createSuggestion({
+        roadmapId: roadmap.id,
+        agentLinkId: link.id,
+        kind: 'comment',
+        targetId: null,
+        payload: {},
+        rationale: 'r',
+      });
+    }
+    const capped = await call(
+      agentApi.POST,
+      'ts',
+      ['suggestions'],
+      agentReq('POST', { kind: 'comment', payload: {}, rationale: 'r' }),
+    );
+    expect(capped.status).toBe(429);
+  });
+
+  it('suggester cannot use editor write routes; viewer cannot suggest', async () => {
+    const { roadmap, item } = await seedRoadmap(store);
+    await store.createAgentLink(roadmap.id, 'S', 'agent_suggester', 'ts');
+    await store.createAgentLink(roadmap.id, 'V', 'agent_viewer', 'tv');
+    expect(
+      (await call(agentApi.PATCH, 'ts', ['items', item.id], agentReq('PATCH', { endDate: '2026-10-01' }))).status,
+    ).toBe(403);
+    expect((await call(agentApi.GET, 'tv', ['suggestions'], agentReq('GET'))).status).toBe(403);
+  });
+
+  it('editor direct writes have human-route parity (validation + effect)', async () => {
+    const { roadmap, initiative, item, sprint } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'E', 'agent_editor', 'te');
+
+    const upd = await call(
+      agentApi.PATCH,
+      'te',
+      ['items', item.id],
+      agentReq('PATCH', { endDate: '2026-10-01' }),
+    );
+    expect(upd.status).toBe(200);
+    expect((await store.getItem(item.id))!.endDate).toBe('2026-10-01');
+
+    const invalid = await call(
+      agentApi.PATCH,
+      'te',
+      ['items', item.id],
+      agentReq('PATCH', { endDate: '2027-06-01' }),
+    );
+    expect(invalid.status).toBe(400);
+
+    const created = await call(
+      agentApi.POST,
+      'te',
+      ['items'],
+      agentReq('POST', {
+        initiativeId: initiative.id,
+        title: 'Agent item',
+        startDate: '2026-11-01',
+        endDate: '2026-11-20',
+      }),
+    );
+    expect(created.status).toBe(201);
+
+    const ini = await call(agentApi.POST, 'te', ['initiatives'], agentReq('POST', { name: 'Ops' }));
+    expect(ini.status).toBe(201);
+
+    const sprintCreated = await call(
+      agentApi.POST,
+      'te',
+      ['items', item.id, 'sprints'],
+      agentReq('POST', { name: 'S2', startDate: '2026-08-17', endDate: '2026-08-28' }),
+    );
+    expect(sprintCreated.status).toBe(201);
+
+    const sprintUpd = await call(
+      agentApi.PATCH,
+      'te',
+      ['sprints', sprint.id],
+      agentReq('PATCH', { name: 'Renamed' }),
+    );
+    expect(sprintUpd.status).toBe(200);
+
+    const del = await call(agentApi.DELETE, 'te', ['sprints', sprint.id], agentReq('DELETE'));
+    expect(del.status).toBe(200);
+    expect(await store.getSprint(sprint.id)).toBeNull();
+
+    const delItem = await call(agentApi.DELETE, 'te', ['items', item.id], agentReq('DELETE'));
+    expect(delItem.status).toBe(200);
+    expect(await store.getItem(item.id)).toBeNull();
+
+    const acts = await store.listAgentActivity(link.id, 20);
+    expect(acts.some((a) => a.action === 'edit')).toBe(true);
   });
 });
