@@ -384,14 +384,22 @@ export function SubcalendarView({
           )}
           {item.okrs && (
             <div className="detail-field">
-              <span className="detail-label">OKRs</span>
+              <span className="detail-label">Key Result</span>
               <span className="detail-value">{item.okrs}</span>
             </div>
           )}
           {item.dris && (
             <div className="detail-field">
-              <span className="detail-label">DRIs</span>
+              <span className="detail-label">DRI</span>
               <span className="detail-value">{item.dris}</span>
+            </div>
+          )}
+          {item.responsibleTeam && (
+            <div className="detail-field">
+              <span className="detail-label">Responsible team</span>
+              <span className="detail-value" data-testid="item-responsible-team-value">
+                {item.responsibleTeam}
+              </span>
             </div>
           )}
           {item.kpi && (
@@ -530,7 +538,16 @@ export function SubcalendarView({
           open
           onOpenChange={(open) => !open && setEditingItem(false)}
           roadmap={roadmap}
-          initiatives={[{ id: item.initiativeId, roadmapId: roadmap.id, name: initiativeName, position: 1, createdAt: '' }]}
+          initiatives={[
+            {
+              id: item.initiativeId,
+              roadmapId: roadmap.id,
+              name: initiativeName,
+              description: '',
+              position: 1,
+              createdAt: '',
+            },
+          ]}
           editing={item}
           onSave={saveItemEdit}
         />

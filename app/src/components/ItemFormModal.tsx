@@ -19,6 +19,7 @@ export interface ItemFormValues {
   milestoneDate: string | null;
   okrs: string;
   dris: string;
+  responsibleTeam: string;
   status: ItemStatus;
   kpi: string;
 }
@@ -62,6 +63,7 @@ export function ItemFormModal({
     milestoneDate: source?.milestoneDate ?? null,
     okrs: source?.okrs ?? '',
     dris: source?.dris ?? '',
+    responsibleTeam: source?.responsibleTeam ?? '',
     status: (source?.status as ItemStatus) ?? 'green',
     kpi: source?.kpi ?? '',
   });
@@ -185,7 +187,7 @@ export function ItemFormModal({
         />
       </div>
       <Textarea
-        label="OKRs"
+        label="Key Result"
         value={values.okrs}
         onChange={(e) => set('okrs', e.target.value)}
         rows={2}
@@ -193,7 +195,7 @@ export function ItemFormModal({
       />
       <div className="form-row">
         <Input
-          label="DRIs"
+          label="DRI"
           value={values.dris}
           onChange={(e) => set('dris', e.target.value)}
           placeholder="Who's responsible"
@@ -212,6 +214,14 @@ export function ItemFormModal({
           fullWidth
         />
       </div>
+      <Input
+        label="Responsible team"
+        value={values.responsibleTeam}
+        onChange={(e) => set('responsibleTeam', e.target.value)}
+        placeholder="e.g. Platform, Growth"
+        fullWidth
+        data-testid="item-responsible-team"
+      />
       <div>
         <span className="form-label">Status</span>
         <div className="status-group" role="radiogroup" aria-label="Status">

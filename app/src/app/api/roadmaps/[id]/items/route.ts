@@ -68,6 +68,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     milestoneDate: (body.milestoneDate as string) || null,
     okrs: typeof body.okrs === 'string' ? body.okrs : '',
     dris: typeof body.dris === 'string' ? body.dris : '',
+    responsibleTeam: typeof body.responsibleTeam === 'string' ? body.responsibleTeam : '',
     status,
     kpi: typeof body.kpi === 'string' ? body.kpi : '',
   };

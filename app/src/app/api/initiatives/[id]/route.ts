@@ -28,6 +28,12 @@ export async function PATCH(req: Request, { params }: Params) {
     await store.updateInitiative(initiative.id, { name: String(body.name).trim() });
   }
 
+  if (body.description !== undefined) {
+    await store.updateInitiative(initiative.id, {
+      description: typeof body.description === 'string' ? body.description : '',
+    });
+  }
+
   if (body.position !== undefined) {
     const target = Number(body.position);
     if (!Number.isInteger(target) || target < 1) {

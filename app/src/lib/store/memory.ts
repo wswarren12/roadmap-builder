@@ -181,6 +181,7 @@ export class MemoryStore implements Store {
       id: randomUUID(),
       roadmapId,
       name,
+      description: '',
       position: existing.length ? existing[existing.length - 1].position + 1 : 1,
       createdAt: now(),
     };
@@ -188,7 +189,10 @@ export class MemoryStore implements Store {
     return initiative;
   }
 
-  async updateInitiative(id: string, patch: Partial<Pick<Initiative, 'name' | 'position'>>) {
+  async updateInitiative(
+    id: string,
+    patch: Partial<Pick<Initiative, 'name' | 'description' | 'position'>>,
+  ) {
     const i = this.db.initiatives.get(id);
     if (!i) throw new Error('initiative not found');
     const updated = { ...i, ...patch };
@@ -231,6 +235,7 @@ export class MemoryStore implements Store {
       milestoneDate: input.milestoneDate ?? null,
       okrs: input.okrs ?? '',
       dris: input.dris ?? '',
+      responsibleTeam: input.responsibleTeam ?? '',
       status: input.status ?? 'green',
       kpi: input.kpi ?? '',
       colorIndex,

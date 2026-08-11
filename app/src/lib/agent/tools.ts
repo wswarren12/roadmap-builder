@@ -49,6 +49,7 @@ export const AGENT_TOOLS: Anthropic.Messages.ToolUnion[] = [
         endDate: DATE,
         description: { type: 'string' },
         dris: { type: 'string', description: 'Comma-separated DRI names' },
+        responsibleTeam: { type: 'string', description: 'Team responsible for delivery' },
         status: { type: 'string', enum: ['green', 'yellow', 'red'] },
         okrs: { type: 'string' },
         kpi: { type: 'string' },
@@ -73,6 +74,7 @@ export const AGENT_TOOLS: Anthropic.Messages.ToolUnion[] = [
         endDate: DATE,
         description: { type: 'string' },
         dris: { type: 'string' },
+        responsibleTeam: { type: 'string' },
         status: { type: 'string', enum: ['green', 'yellow', 'red'] },
         okrs: { type: 'string' },
         kpi: { type: 'string' },
@@ -167,7 +169,12 @@ export async function roadmapSnapshot(roadmap: Roadmap): Promise<string> {
       startMonth: roadmap.startMonth,
       endMonth: roadmap.endMonth,
     },
-    initiatives: initiatives.map((i) => ({ id: i.id, name: i.name, position: i.position })),
+    initiatives: initiatives.map((i) => ({
+      id: i.id,
+      name: i.name,
+      description: i.description,
+      position: i.position,
+    })),
     items: itemsWithSprints,
     team: team.map((m) => m.name),
   });
@@ -247,6 +254,7 @@ export async function executeAgentTool(
           milestoneDate: (input.milestoneDate as string) || null,
           okrs: String(input.okrs ?? ''),
           dris: String(input.dris ?? ''),
+          responsibleTeam: String(input.responsibleTeam ?? ''),
           status: STATUSES.includes(input.status as ItemStatus)
             ? (input.status as ItemStatus)
             : 'green',
@@ -304,7 +312,14 @@ export async function executeAgentTool(
         }
         patch.status = input.status;
       }
-      for (const key of ['description', 'dris', 'okrs', 'kpi', 'milestoneText'] as const) {
+      for (const key of [
+        'description',
+        'dris',
+        'responsibleTeam',
+        'okrs',
+        'kpi',
+        'milestoneText',
+      ] as const) {
         if (input[key] !== undefined) patch[key] = String(input[key] ?? '');
       }
       const updated = await store.updateItem(item.id, patch);

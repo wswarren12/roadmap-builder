@@ -28,6 +28,8 @@ export interface Initiative {
   id: string;
   roadmapId: string;
   name: string;
+  /** Short theme blurb shown under the name in the row label. */
+  description: string;
   position: number;
   createdAt: string;
 }
@@ -44,6 +46,7 @@ export interface RoadmapItem {
   milestoneDate: string | null;
   okrs: string;
   dris: string;
+  responsibleTeam: string;
   status: ItemStatus;
   kpi: string;
   colorIndex: number;
@@ -190,6 +193,7 @@ export interface ItemInput {
   milestoneDate?: string | null;
   okrs?: string;
   dris?: string;
+  responsibleTeam?: string;
   status?: ItemStatus;
   kpi?: string;
 }

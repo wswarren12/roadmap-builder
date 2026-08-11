@@ -267,6 +267,7 @@
   margin-left: calc(-1 * var(--spacing-sm));
   width: 100%;
   resize: none;
+  overflow: hidden;
   font-family: var(--font-family-primary);
 
   &:hover:not(:disabled) {
@@ -438,6 +439,11 @@
   padding: 2px var(--spacing-xs);
   width: 100%;
   min-width: 0;
+  resize: none;
+  overflow: hidden;
+  font-family: var(--font-family-primary);
+  line-height: 1.3;
+  display: block;
 
   &:hover:not(:disabled) {
     border-color: var(--border-neutral-xsubtle);
@@ -451,6 +457,37 @@
   &:disabled {
     opacity: 1;
   }
+}
+
+.row-desc-input {
+  @include pl.body-xs;
+  color: var(--foreground-neutral-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 var(--spacing-xs);
+  width: 100%;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  font-family: var(--font-family-primary);
+  line-height: 1.35;
+
+  &:hover {
+    border-color: var(--border-neutral-xsubtle);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--border-brand-subtle);
+  }
+}
+
+.row-desc-text {
+  @include pl.body-xs;
+  color: var(--foreground-neutral-tertiary);
+  margin: 0;
+  padding: 0 var(--spacing-xs);
 }
 
 .row-label-tools {
@@ -589,6 +626,14 @@
   color: var(--foreground-neutral-secondary);
   font-weight: 600;
   user-select: none;
+}
+
+// Initials variant: PL-blue circle, white ring, white letters — readable at
+// bar-avatar sizes where the old neutral-on-neutral pairing washed out.
+.avatar-chip--initials {
+  background: var(--background-brand-default);
+  color: var(--background-base-white);
+  border: 1px solid var(--background-base-white);
 }
 
 .bar-avatars {

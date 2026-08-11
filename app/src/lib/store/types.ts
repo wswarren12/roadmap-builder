@@ -48,7 +48,7 @@ export interface Store {
   createInitiative(roadmapId: string, name: string): Promise<Initiative>;
   updateInitiative(
     id: string,
-    patch: Partial<Pick<Initiative, 'name' | 'position'>>,
+    patch: Partial<Pick<Initiative, 'name' | 'description' | 'position'>>,
   ): Promise<Initiative>;
   deleteInitiative(id: string): Promise<void>;
 

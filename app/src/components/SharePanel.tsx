@@ -13,6 +13,7 @@ import type {
   ShareRole,
 } from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
+import { copyText } from '@/lib/client/clipboard';
 import { useToast } from './Toasts';
 
 /**
@@ -91,11 +92,10 @@ function InviteLinkSection({
 
   async function copyLink() {
     if (!joinUrl) return;
-    try {
-      await navigator.clipboard.writeText(joinUrl);
+    if (await copyText(joinUrl)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
+    } else {
       toast('warning', 'Copy failed — select the link text and copy it manually');
     }
   }
@@ -228,11 +228,10 @@ function AgentLinksSection({
 
   async function copyUrl(link: AgentLinkWithActivity) {
     const url = `${window.location.origin}/agent/${link.token}`;
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       setCopiedId(link.id);
       setTimeout(() => setCopiedId(null), 2500);
-    } catch {
+    } else {
       toast('warning', 'Copy failed — select the link text and copy it manually');
     }
   }

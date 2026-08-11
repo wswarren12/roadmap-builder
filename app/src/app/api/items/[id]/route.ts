@@ -62,6 +62,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.description !== undefined) patch.description = String(body.description ?? '');
   if (body.okrs !== undefined) patch.okrs = String(body.okrs ?? '');
   if (body.dris !== undefined) patch.dris = String(body.dris ?? '');
+  if (body.responsibleTeam !== undefined) patch.responsibleTeam = String(body.responsibleTeam ?? '');
   if (body.kpi !== undefined) patch.kpi = String(body.kpi ?? '');
   if (body.milestoneText !== undefined) patch.milestoneText = String(body.milestoneText ?? '');
   if (body.status !== undefined) {

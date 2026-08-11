@@ -41,6 +41,7 @@ function mapInitiative(r: any): Initiative {
     id: r.id,
     roadmapId: r.roadmap_id,
     name: r.name,
+    description: r.description ?? '',
     position: r.position,
     createdAt: r.created_at,
   };
@@ -59,6 +60,7 @@ function mapItem(r: any): RoadmapItem {
     milestoneDate: r.milestone_date,
     okrs: r.okrs ?? '',
     dris: r.dris ?? '',
+    responsibleTeam: r.responsible_team ?? '',
     status: r.status,
     kpi: r.kpi ?? '',
     colorIndex: r.color_index,
@@ -164,6 +166,7 @@ function itemPatch(patch: Partial<ItemInput>) {
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.okrs !== undefined) row.okrs = patch.okrs;
   if (patch.dris !== undefined) row.dris = patch.dris;
+  if (patch.responsibleTeam !== undefined) row.responsible_team = patch.responsibleTeam;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   row.updated_at = new Date().toISOString();
@@ -310,7 +313,10 @@ export class SupabaseStore implements Store {
     return mapInitiative(unwrap(res));
   }
 
-  async updateInitiative(id: string, patch: Partial<Pick<Initiative, 'name' | 'position'>>) {
+  async updateInitiative(
+    id: string,
+    patch: Partial<Pick<Initiative, 'name' | 'description' | 'position'>>,
+  ) {
     const res = await this.sb.from('initiatives').update(patch).eq('id', id).select().single();
     return mapInitiative(unwrap(res));
   }
@@ -368,6 +374,7 @@ export class SupabaseStore implements Store {
         milestone_date: input.milestoneDate ?? null,
         okrs: input.okrs ?? '',
         dris: input.dris ?? '',
+        responsible_team: input.responsibleTeam ?? '',
         status: input.status ?? 'green',
         kpi: input.kpi ?? '',
         color_index: colorIndex,

@@ -37,6 +37,15 @@ const LANE_GAP = 6;
 const MIN_PX_PER_DAY = 4.5;
 const LABEL_W = 208;
 
+/** Auto-size a textarea to its content so long text never scrolls inside it.
+ *  Used as both a ref callback (sizes on mount/remount — the `key` props
+ *  remount on server updates) and an onInput handler (sizes while typing). */
+function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 export type ItemWithCount = RoadmapItem & { sprintCount: number };
 
 interface RoadmapData {
@@ -311,6 +320,25 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       );
     } catch {
       toast('error', 'Rename failed — please retry');
+    }
+  }
+
+  async function saveInitiativeDesc(initiative: Initiative, description: string) {
+    if (description === initiative.description) return;
+    try {
+      await api(`/api/initiatives/${initiative.id}`, { method: 'PATCH', body: { description } });
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              initiatives: d.initiatives.map((i) =>
+                i.id === initiative.id ? { ...i, description } : i,
+              ),
+            }
+          : d,
+      );
+    } catch {
+      toast('error', 'Could not save the description — please retry');
     }
   }
 
@@ -664,6 +692,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
           defaultValue={roadmap.description}
           key={`desc-${roadmap.updatedAt}`}
           rows={1}
+          ref={autoGrow}
+          onInput={(e) => autoGrow(e.currentTarget)}
           placeholder={editable ? 'Add a short description…' : undefined}
           disabled={!editable}
           aria-label="Roadmap description"
@@ -759,19 +789,45 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                           ⋮⋮
                         </span>
                       )}
-                      <input
+                      <textarea
                         className="row-name-input"
                         defaultValue={initiative.name}
                         key={`${initiative.id}-${initiative.name}`}
+                        rows={1}
+                        ref={autoGrow}
+                        onInput={(e) => autoGrow(e.currentTarget)}
                         disabled={!editable}
                         aria-label="Initiative name"
                         data-testid="initiative-name"
                         onBlur={(e) => renameInitiative(initiative, e.target.value)}
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && (e.target as HTMLInputElement).blur()
-                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.target as HTMLTextAreaElement).blur();
+                          }
+                        }}
                       />
                     </div>
+                    {editable ? (
+                      <textarea
+                        className="row-desc-input"
+                        defaultValue={initiative.description}
+                        key={`${initiative.id}-desc-${initiative.description}`}
+                        rows={1}
+                        ref={autoGrow}
+                        onInput={(e) => autoGrow(e.currentTarget)}
+                        placeholder="Add a theme description…"
+                        aria-label="Initiative description"
+                        data-testid="initiative-desc"
+                        onBlur={(e) => saveInitiativeDesc(initiative, e.target.value)}
+                      />
+                    ) : (
+                      initiative.description && (
+                        <p className="row-desc-text" data-testid="initiative-desc">
+                          {initiative.description}
+                        </p>
+                      )
+                    )}
                     {editable && (
                       <div className="row-label-tools">
                         <Button
