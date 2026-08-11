@@ -28,6 +28,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
 import { SharePanel } from './SharePanel';
 import { SignedOutLanding } from './SignedOutLanding';
+import { SuggestionsPanel, type SuggestionWithMeta } from './SuggestionsPanel';
 import { TeamPanel } from './TeamPanel';
 import { useToast } from './Toasts';
 
@@ -63,6 +64,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionWithMeta[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [deletingRoadmap, setDeletingRoadmap] = useState(false);
   const [deletingInitiative, setDeletingInitiative] = useState<Initiative | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,6 +96,12 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       api<{ members: TeamMember[] }>(`/api/roadmaps/${roadmapId}/team`)
         .then((r) => setTeam(r.members))
         .catch(() => {});
+      // Agent suggestions are reviewer-only (write tier); best-effort too.
+      if (res.role === 'owner' || res.role === 'editor') {
+        api<{ suggestions: SuggestionWithMeta[] }>(`/api/roadmaps/${roadmapId}/suggestions`)
+          .then((r) => setSuggestions(r.suggestions))
+          .catch(() => {});
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 401) return setState('signedout');
@@ -208,6 +217,50 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   const todayOff = dayOffsetInSpan(spanStart, spanEnd, todayISO());
 
   const totalSprints = items.reduce((sum, i) => sum + i.sprintCount, 0);
+
+  // Pending agent suggestions preview as dotted ghost bars (agent-links
+  // design). Item-kind only here — sprint-kind previews belong to the
+  // drill-down view and are out of v1 scope. Ghosts with dates the current
+  // span can't place (roadmap changed since filing) are skipped at render.
+  const pendingSuggestions = suggestions.filter((s) => s.status === 'pending');
+  const ghostBars: Array<{
+    id: string;
+    initiativeId: string;
+    title: string;
+    startDate: string;
+    endDate: string;
+    rationale: string;
+  }> = [];
+  for (const s of pendingSuggestions) {
+    const p = s.payload as Record<string, unknown>;
+    if (s.kind === 'create_item') {
+      if (
+        typeof p.initiativeId === 'string' &&
+        typeof p.startDate === 'string' &&
+        typeof p.endDate === 'string'
+      ) {
+        ghostBars.push({
+          id: s.id,
+          initiativeId: p.initiativeId,
+          title: String(p.title ?? 'New item'),
+          startDate: p.startDate,
+          endDate: p.endDate,
+          rationale: s.rationale,
+        });
+      }
+    } else if (s.kind === 'update_item') {
+      const target = items.find((i) => i.id === s.targetId);
+      if (!target || (p.startDate === undefined && p.endDate === undefined)) continue;
+      ghostBars.push({
+        id: s.id,
+        initiativeId: typeof p.initiativeId === 'string' ? p.initiativeId : target.initiativeId,
+        title: target.title,
+        startDate: typeof p.startDate === 'string' ? p.startDate : target.startDate,
+        endDate: typeof p.endDate === 'string' ? p.endDate : target.endDate,
+        rationale: s.rationale,
+      });
+    }
+  }
 
   // ── mutations ──────────────────────────────────────────────────────────────
 
@@ -552,6 +605,16 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             }}
           />
           <div className="header-actions">
+            {editable && pendingSuggestions.length > 0 && (
+              <Button
+                variant="secondary"
+                styleType="light"
+                onClick={() => setSuggestionsOpen(true)}
+                data-testid="suggestions-badge"
+              >
+                {pendingSuggestions.length} suggestion{pendingSuggestions.length === 1 ? '' : 's'}
+              </Button>
+            )}
             {editable && (
               <Button
                 variant="secondary"
@@ -664,7 +727,17 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             {initiatives.map((initiative) => {
               const rowItems = items.filter((i) => i.initiativeId === initiative.id);
               const { lanes, laneCount } = assignLanes(rowItems);
-              const rowHeight = laneCount * (LANE_H + LANE_GAP) + LANE_GAP;
+              // Ghosts stack in extra lanes below the real bars so a pending
+              // proposal never collides with (or reflows) actual items.
+              const rowGhosts = ghostBars.filter(
+                (g) =>
+                  g.initiativeId === initiative.id &&
+                  dayOffsetInSpan(spanStart, spanEnd, g.startDate) !== null &&
+                  dayOffsetInSpan(spanStart, spanEnd, g.endDate) !== null,
+              );
+              const ghostLanes = assignLanes(rowGhosts);
+              const rowHeight =
+                (laneCount + ghostLanes.laneCount) * (LANE_H + LANE_GAP) + LANE_GAP;
               return (
                 <div
                   className={`swim-row${
@@ -817,6 +890,32 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         avatars={driAvatars(item.dris, team)}
                       />
                     ))}
+                    {rowGhosts.map((g) => {
+                      const off = dayOffsetInSpan(spanStart, spanEnd, g.startDate)!;
+                      const endOff = dayOffsetInSpan(spanStart, spanEnd, g.endDate)!;
+                      const lane = laneCount + (ghostLanes.lanes.get(g.id) ?? 0);
+                      return (
+                        <div
+                          key={g.id}
+                          className="bar ghost-bar"
+                          data-testid="ghost-bar"
+                          title={`Suggested: ${g.rationale}`}
+                          style={{
+                            position: 'absolute',
+                            left: off * pxPerDay,
+                            width: (endOff - off + 1) * pxPerDay,
+                            top: LANE_GAP + lane * (LANE_H + LANE_GAP),
+                            height: LANE_H,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSuggestionsOpen(true);
+                          }}
+                        >
+                          <span className="bar-title">{g.title}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -863,6 +962,15 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
 
       {isOwner && (
         <SharePanel open={shareOpen} onOpenChange={setShareOpen} roadmapId={roadmap.id} />
+      )}
+
+      {editable && (
+        <SuggestionsPanel
+          open={suggestionsOpen}
+          onOpenChange={setSuggestionsOpen}
+          suggestions={suggestions}
+          onResolved={load}
+        />
       )}
 
       <TeamPanel
