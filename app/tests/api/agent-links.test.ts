@@ -1,6 +1,10 @@
+import { NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EDITOR, OWNER, VIEWER, freshStore, json, reqAs, seedRoadmap } from './harness';
+import { authorizeAgent } from '@/lib/api-helpers';
+import { AGENT_RATE_LIMIT, resetRateLimits } from '@/lib/agent-links/rate-limit';
 import type { MemoryStore } from '@/lib/store';
+import type { AgentRole } from '@/lib/types';
 
 describe('agent-links store layer', () => {
   let store: MemoryStore;
@@ -65,5 +69,53 @@ describe('agent-links store layer', () => {
     const acts = await store.listAgentActivity(link.id, 5);
     expect(acts).toHaveLength(2);
     expect(acts[0].detail).toEqual({ path: 'roadmap' });
+  });
+});
+
+describe('authorizeAgent', () => {
+  let store: MemoryStore;
+  beforeEach(() => {
+    store = freshStore();
+    resetRateLimits();
+  });
+
+  async function seededLink(role: AgentRole) {
+    const { roadmap } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'Bot', role, `tok-${role}`);
+    return { roadmap, link };
+  }
+
+  it('unknown token → 404', async () => {
+    const r = await authorizeAgent('nope', 'read');
+    expect(r).toBeInstanceOf(NextResponse);
+    expect((r as NextResponse).status).toBe(404);
+  });
+
+  it('revoked token → 404, not 403', async () => {
+    const { link } = await seededLink('agent_editor');
+    await store.revokeAgentLink(link.id);
+    const r = await authorizeAgent(link.token, 'read');
+    expect((r as NextResponse).status).toBe(404);
+  });
+
+  it('tier ladder: viewer reads only; suggester suggests; editor writes', async () => {
+    const v = await seededLink('agent_viewer');
+    expect(await authorizeAgent(v.link.token, 'read')).toHaveProperty('link');
+    expect(((await authorizeAgent(v.link.token, 'suggest')) as NextResponse).status).toBe(403);
+    const s = await seededLink('agent_suggester');
+    expect(await authorizeAgent(s.link.token, 'suggest')).toHaveProperty('link');
+    expect(((await authorizeAgent(s.link.token, 'write')) as NextResponse).status).toBe(403);
+    const e = await seededLink('agent_editor');
+    expect(await authorizeAgent(e.link.token, 'write')).toHaveProperty('link');
+  });
+
+  it('bumps last_used_at and rate-limits with retry_after', async () => {
+    const { link } = await seededLink('agent_viewer');
+    await authorizeAgent(link.token, 'read');
+    expect((await store.getAgentLink(link.id))!.lastUsedAt).not.toBeNull();
+    for (let i = 1; i < AGENT_RATE_LIMIT; i++) await authorizeAgent(link.token, 'read');
+    const r = await authorizeAgent(link.token, 'read');
+    expect((r as NextResponse).status).toBe(429);
+    expect(await (r as NextResponse).clone().json()).toHaveProperty('retry_after');
   });
 });

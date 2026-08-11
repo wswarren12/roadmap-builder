@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit } from './agent-links/rate-limit';
 import { resolveIdentity } from './auth';
 import { getStore } from './store';
-import type { Identity, Roadmap, Role } from './types';
+import type { AgentLink, AgentRole, Identity, Roadmap, Role } from './types';
 
 export function jsonError(status: number, error: string, field?: string) {
   return NextResponse.json(field ? { error, field } : { error }, { status });
@@ -68,6 +69,47 @@ export async function authorizeRoadmap(
     return jsonError(403, 'Only the owner can manage sharing or delete this roadmap');
   }
   return { identity, roadmap, role };
+}
+
+export type AgentTier = 'read' | 'suggest' | 'write';
+
+export interface AuthedAgent {
+  link: AgentLink;
+  roadmap: Roadmap;
+}
+
+const AGENT_TIER: Record<AgentTier, AgentRole[]> = {
+  read: ['agent_viewer', 'agent_suggester', 'agent_editor'],
+  suggest: ['agent_suggester', 'agent_editor'],
+  write: ['agent_editor'],
+};
+
+/**
+ * Agent-link counterpart to authorizeRoadmap (agent-links design): the URL
+ * token is the whole credential. Unknown and revoked tokens both 404 so a
+ * revoked link can't be used to confirm the roadmap exists. Every authorized
+ * call bumps last_used_at and counts against the per-token rate limit.
+ */
+export async function authorizeAgent(
+  token: string,
+  required: AgentTier,
+): Promise<AuthedAgent | NextResponse> {
+  const retryAfter = checkRateLimit(token);
+  if (retryAfter !== null) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded', retry_after: retryAfter },
+      { status: 429, headers: { 'retry-after': String(retryAfter) } },
+    );
+  }
+  const link = await getStore().findAgentLinkByToken(token);
+  if (!link || link.revokedAt) return jsonError(404, 'Not found');
+  if (!AGENT_TIER[required].includes(link.role)) {
+    return jsonError(403, `This agent link has ${link.role.replace('agent_', '')} access only`);
+  }
+  const roadmap = await getStore().getRoadmap(link.roadmapId);
+  if (!roadmap) return jsonError(404, 'Not found');
+  await getStore().touchAgentLink(link.id);
+  return { link, roadmap };
 }
 
 export async function requireIdentity(req: Request): Promise<Identity | NextResponse> {
