@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EDITOR, OWNER, VIEWER, freshStore, json, reqAs, seedRoadmap } from './harness';
 import * as agentApi from '@/app/agent/[token]/api/[[...path]]/route';
+import * as linkRoute from '@/app/api/agent-links/[id]/route';
+import * as linksRoute from '@/app/api/roadmaps/[id]/agent-links/route';
+import * as suggListRoute from '@/app/api/roadmaps/[id]/suggestions/route';
+import * as resolveRoute from '@/app/api/suggestions/[id]/resolve/route';
 import { authorizeAgent } from '@/lib/api-helpers';
 import { AGENT_RATE_LIMIT, resetRateLimits } from '@/lib/agent-links/rate-limit';
 import type { MemoryStore } from '@/lib/store';
@@ -314,5 +318,108 @@ describe('agent API', () => {
 
     const acts = await store.listAgentActivity(link.id, 20);
     expect(acts.some((a) => a.action === 'edit')).toBe(true);
+  });
+});
+
+describe('agent-link management + suggestion review', () => {
+  let store: MemoryStore;
+  beforeEach(() => {
+    store = freshStore();
+    resetRateLimits();
+  });
+
+  it('owner creates (suggester default), lists, revokes; non-owner 403', async () => {
+    const { roadmap } = await seedRoadmap(store);
+    const created = await linksRoute.POST(reqAs(OWNER, 'POST', { name: 'Hermes PM bot' }), {
+      params: { id: roadmap.id },
+    });
+    expect(created.status).toBe(201);
+    const { link } = await json(created);
+    expect(link.role).toBe('agent_suggester');
+    expect(link.token).toBeTruthy();
+
+    expect(
+      (await linksRoute.POST(reqAs(EDITOR, 'POST', { name: 'X' }), { params: { id: roadmap.id } })).status,
+    ).toBe(403);
+    expect(
+      (await linksRoute.POST(reqAs(OWNER, 'POST', { name: '' }), { params: { id: roadmap.id } })).status,
+    ).toBe(400);
+    expect(
+      (await linksRoute.POST(reqAs(OWNER, 'POST', { name: 'X', role: 'agent_god' }), { params: { id: roadmap.id } })).status,
+    ).toBe(400);
+
+    const listed = await json(await linksRoute.GET(reqAs(OWNER), { params: { id: roadmap.id } }));
+    expect(listed.links).toHaveLength(1);
+    expect(listed.links[0].activity).toEqual([]);
+
+    expect((await linkRoute.DELETE(reqAs(VIEWER, 'DELETE'), { params: { id: link.id } })).status).toBe(403);
+    expect((await linkRoute.DELETE(reqAs(OWNER, 'DELETE'), { params: { id: link.id } })).status).toBe(200);
+    expect((await store.getAgentLink(link.id))!.revokedAt).not.toBeNull();
+  });
+
+  it('suggest → accept mutates; reject leaves untouched; write tier enforced', async () => {
+    const { roadmap, item } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'Bot', 'agent_suggester', 'tk');
+    const s1 = await store.createSuggestion({
+      roadmapId: roadmap.id,
+      agentLinkId: link.id,
+      kind: 'update_item',
+      targetId: item.id,
+      payload: { endDate: '2026-10-01' },
+      rationale: 'r',
+    });
+    const s2 = await store.createSuggestion({
+      roadmapId: roadmap.id,
+      agentLinkId: link.id,
+      kind: 'delete_item',
+      targetId: item.id,
+      payload: {},
+      rationale: 'r',
+    });
+
+    const list = await json(await suggListRoute.GET(reqAs(EDITOR), { params: { id: roadmap.id } }));
+    expect(list.suggestions).toHaveLength(2);
+    expect(list.suggestions.map((s: { agentName: string }) => s.agentName)).toEqual(['Bot', 'Bot']);
+    expect(list.suggestions[0].summary).toBeTruthy();
+    expect((await suggListRoute.GET(reqAs(VIEWER), { params: { id: roadmap.id } })).status).toBe(403);
+
+    const acc = await json(
+      await resolveRoute.POST(reqAs(OWNER, 'POST', { action: 'accept' }), { params: { id: s1.id } }),
+    );
+    expect(acc.applied).toBe(true);
+    expect((await store.getItem(item.id))!.endDate).toBe('2026-10-01');
+
+    const rej = await json(
+      await resolveRoute.POST(reqAs(OWNER, 'POST', { action: 'reject' }), { params: { id: s2.id } }),
+    );
+    expect(rej.suggestion.status).toBe('rejected');
+    expect(await store.getItem(item.id)).not.toBeNull();
+
+    expect(
+      (await resolveRoute.POST(reqAs(OWNER, 'POST', { action: 'accept' }), { params: { id: s1.id } })).status,
+    ).toBe(409);
+    expect(
+      (await resolveRoute.POST(reqAs(VIEWER, 'POST', { action: 'accept' }), { params: { id: s2.id } })).status,
+    ).toBe(403);
+  });
+
+  it('accept after target deleted → rejected by system, applied false', async () => {
+    const { roadmap, item } = await seedRoadmap(store);
+    const link = await store.createAgentLink(roadmap.id, 'Bot', 'agent_suggester', 'tk2');
+    const s = await store.createSuggestion({
+      roadmapId: roadmap.id,
+      agentLinkId: link.id,
+      kind: 'update_item',
+      targetId: item.id,
+      payload: { endDate: '2026-10-01' },
+      rationale: 'r',
+    });
+    await store.deleteItem(item.id);
+    const res = await json(
+      await resolveRoute.POST(reqAs(OWNER, 'POST', { action: 'accept' }), { params: { id: s.id } }),
+    );
+    expect(res.applied).toBe(false);
+    expect(res.suggestion.status).toBe('rejected');
+    expect(res.suggestion.resolvedBy).toBe('system');
   });
 });
