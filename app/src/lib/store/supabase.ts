@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
+  AgentActivityEntry,
+  AgentLink,
+  AgentRole,
   Initiative,
   InviteTokens,
   ItemInput,
@@ -10,6 +13,8 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  Suggestion,
+  SuggestionKind,
   TeamMember,
   UserState,
 } from '../types';
@@ -86,6 +91,46 @@ function mapTeamMember(r: any): TeamMember {
     memberUid: r.member_uid,
     name: r.name,
     image: r.image,
+    createdAt: r.created_at,
+  };
+}
+
+function mapAgentLink(r: any): AgentLink {
+  return {
+    id: r.id,
+    roadmapId: r.roadmap_id,
+    token: r.token,
+    name: r.name,
+    role: r.role,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+    revokedAt: r.revoked_at,
+  };
+}
+
+function mapSuggestion(r: any): Suggestion {
+  return {
+    id: r.id,
+    roadmapId: r.roadmap_id,
+    agentLinkId: r.agent_link_id,
+    kind: r.kind,
+    targetId: r.target_id,
+    payload: r.payload ?? {},
+    rationale: r.rationale ?? '',
+    status: r.status,
+    resolvedBy: r.resolved_by,
+    resolvedAt: r.resolved_at,
+    createdAt: r.created_at,
+  };
+}
+
+function mapAgentActivity(r: any): AgentActivityEntry {
+  return {
+    id: r.id,
+    agentLinkId: r.agent_link_id,
+    roadmapId: r.roadmap_id,
+    action: r.action,
+    detail: r.detail ?? {},
     createdAt: r.created_at,
   };
 }
@@ -549,5 +594,151 @@ export class SupabaseStore implements Store {
       if (data) return { roadmap: mapRoadmap(data), role };
     }
     return null;
+  }
+
+  async createAgentLink(roadmapId: string, name: string, role: AgentRole, token: string) {
+    const res = await this.sb
+      .from('agent_links')
+      .insert({ roadmap_id: roadmapId, token, name, role })
+      .select()
+      .single();
+    return mapAgentLink(unwrap(res));
+  }
+
+  async listAgentLinks(roadmapId: string) {
+    const { data, error } = await this.sb
+      .from('agent_links')
+      .select('*')
+      .eq('roadmap_id', roadmapId)
+      .order('created_at');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapAgentLink);
+  }
+
+  async getAgentLink(id: string) {
+    const { data, error } = await this.sb.from('agent_links').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapAgentLink(data) : null;
+  }
+
+  async findAgentLinkByToken(token: string) {
+    const { data, error } = await this.sb
+      .from('agent_links')
+      .select('*')
+      .eq('token', token)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapAgentLink(data) : null;
+  }
+
+  async revokeAgentLink(id: string) {
+    const { error } = await this.sb
+      .from('agent_links')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async touchAgentLink(id: string) {
+    const { error } = await this.sb
+      .from('agent_links')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async createSuggestion(input: {
+    roadmapId: string;
+    agentLinkId: string;
+    kind: SuggestionKind;
+    targetId: string | null;
+    payload: Record<string, unknown>;
+    rationale: string;
+  }) {
+    const res = await this.sb
+      .from('suggestions')
+      .insert({
+        roadmap_id: input.roadmapId,
+        agent_link_id: input.agentLinkId,
+        kind: input.kind,
+        target_id: input.targetId,
+        payload: input.payload,
+        rationale: input.rationale,
+      })
+      .select()
+      .single();
+    return mapSuggestion(unwrap(res));
+  }
+
+  async listSuggestions(roadmapId: string) {
+    const { data, error } = await this.sb
+      .from('suggestions')
+      .select('*')
+      .eq('roadmap_id', roadmapId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapSuggestion);
+  }
+
+  async listSuggestionsByLink(agentLinkId: string) {
+    const { data, error } = await this.sb
+      .from('suggestions')
+      .select('*')
+      .eq('agent_link_id', agentLinkId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapSuggestion);
+  }
+
+  async getSuggestion(id: string) {
+    const { data, error } = await this.sb.from('suggestions').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapSuggestion(data) : null;
+  }
+
+  async resolveSuggestion(id: string, status: 'accepted' | 'rejected', resolvedBy: string) {
+    const res = await this.sb
+      .from('suggestions')
+      .update({ status, resolved_by: resolvedBy, resolved_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    return mapSuggestion(unwrap(res));
+  }
+
+  async countPendingSuggestions(agentLinkId: string) {
+    const { count, error } = await this.sb
+      .from('suggestions')
+      .select('*', { count: 'exact', head: true })
+      .eq('agent_link_id', agentLinkId)
+      .eq('status', 'pending');
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  }
+
+  async logAgentActivity(entry: {
+    agentLinkId: string;
+    roadmapId: string;
+    action: string;
+    detail: Record<string, unknown>;
+  }) {
+    const { error } = await this.sb.from('agent_activity').insert({
+      agent_link_id: entry.agentLinkId,
+      roadmap_id: entry.roadmapId,
+      action: entry.action,
+      detail: entry.detail,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  async listAgentActivity(agentLinkId: string, limit: number) {
+    const { data, error } = await this.sb
+      .from('agent_activity')
+      .select('*')
+      .eq('agent_link_id', agentLinkId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapAgentActivity);
   }
 }

@@ -1,4 +1,7 @@
 import type {
+  AgentActivityEntry,
+  AgentLink,
+  AgentRole,
   Initiative,
   InviteTokens,
   ItemInput,
@@ -9,6 +12,8 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  Suggestion,
+  SuggestionKind,
   TeamMember,
   UserState,
 } from '../types';
@@ -97,4 +102,46 @@ export interface Store {
   findRoadmapByInviteToken(
     token: string,
   ): Promise<{ roadmap: Roadmap; role: ShareRole } | null>;
+
+  // agent links (agent-links design 2026-08-05)
+  createAgentLink(
+    roadmapId: string,
+    name: string,
+    role: AgentRole,
+    token: string,
+  ): Promise<AgentLink>;
+  listAgentLinks(roadmapId: string): Promise<AgentLink[]>;
+  getAgentLink(id: string): Promise<AgentLink | null>;
+  /** Returns revoked rows too — the caller checks revokedAt (404 either way). */
+  findAgentLinkByToken(token: string): Promise<AgentLink | null>;
+  revokeAgentLink(id: string): Promise<void>;
+  touchAgentLink(id: string): Promise<void>;
+
+  // suggestions (agent-proposed changes; newest first from the list methods)
+  createSuggestion(input: {
+    roadmapId: string;
+    agentLinkId: string;
+    kind: SuggestionKind;
+    targetId: string | null;
+    payload: Record<string, unknown>;
+    rationale: string;
+  }): Promise<Suggestion>;
+  listSuggestions(roadmapId: string): Promise<Suggestion[]>;
+  listSuggestionsByLink(agentLinkId: string): Promise<Suggestion[]>;
+  getSuggestion(id: string): Promise<Suggestion | null>;
+  resolveSuggestion(
+    id: string,
+    status: 'accepted' | 'rejected',
+    resolvedBy: string,
+  ): Promise<Suggestion>;
+  countPendingSuggestions(agentLinkId: string): Promise<number>;
+
+  // agent activity (append-only; newest first, never contains tokens)
+  logAgentActivity(entry: {
+    agentLinkId: string;
+    roadmapId: string;
+    action: string;
+    detail: Record<string, unknown>;
+  }): Promise<void>;
+  listAgentActivity(agentLinkId: string, limit: number): Promise<AgentActivityEntry[]>;
 }

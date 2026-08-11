@@ -106,6 +106,64 @@ export interface TeamMember {
   createdAt: string;
 }
 
+/** The power an agent link grants (agent-links design, 2026-08-05). */
+export type AgentRole = 'agent_viewer' | 'agent_suggester' | 'agent_editor';
+
+/**
+ * A named, revocable bearer capability: the token in /agent/<token> is the
+ * whole credential. `revokedAt` null = active (soft revoke keeps history).
+ */
+export interface AgentLink {
+  id: string;
+  roadmapId: string;
+  token: string;
+  name: string;
+  role: AgentRole;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export type SuggestionKind =
+  | 'create_item'
+  | 'update_item'
+  | 'delete_item'
+  | 'create_sprint'
+  | 'update_sprint'
+  | 'comment';
+
+export type SuggestionStatus = 'pending' | 'accepted' | 'rejected';
+
+/**
+ * An agent-proposed change awaiting human review. `payload` uses the same
+ * shapes as the human PATCH/POST request bodies, so "accept" replays a
+ * validated body through the existing store functions. `targetId` is the
+ * item/sprint being modified (null for creates/comments).
+ */
+export interface Suggestion {
+  id: string;
+  roadmapId: string;
+  agentLinkId: string;
+  kind: SuggestionKind;
+  targetId: string | null;
+  payload: Record<string, unknown>;
+  rationale: string;
+  status: SuggestionStatus;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+/** Append-only audit log row for agent-link API calls. Never holds tokens. */
+export interface AgentActivityEntry {
+  id: string;
+  agentLinkId: string;
+  roadmapId: string;
+  action: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface UserState {
   userUid: string;
   lastRoadmapId: string | null;

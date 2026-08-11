@@ -1,5 +1,8 @@
 import { randomUUID } from 'crypto';
 import type {
+  AgentActivityEntry,
+  AgentLink,
+  AgentRole,
   Initiative,
   InviteTokens,
   ItemInput,
@@ -10,6 +13,8 @@ import type {
   ShareRole,
   SprintInput,
   SprintItem,
+  Suggestion,
+  SuggestionKind,
   TeamMember,
   UserState,
 } from '../types';
@@ -28,6 +33,11 @@ interface Db {
   teamMembers: Map<string, TeamMember>;
   userState: Map<string, UserState>;
   inviteTokens: Map<string, InviteTokens>; // roadmapId → per-role tokens
+  agentLinks: Map<string, AgentLink>;
+  suggestions: Map<string, Suggestion>;
+  // Array, not a Map sorted by timestamp: two logs can land in the same ms,
+  // and insertion order is the ground truth for "newest first".
+  agentActivity: AgentActivityEntry[];
 }
 
 function emptyDb(): Db {
@@ -40,6 +50,9 @@ function emptyDb(): Db {
     teamMembers: new Map(),
     userState: new Map(),
     inviteTokens: new Map(),
+    agentLinks: new Map(),
+    suggestions: new Map(),
+    agentActivity: [],
   };
 }
 
@@ -119,6 +132,13 @@ export class MemoryStore implements Store {
     for (const [tmid, tm] of this.db.teamMembers) {
       if (tm.roadmapId === id) this.db.teamMembers.delete(tmid);
     }
+    for (const [alid, al] of this.db.agentLinks) {
+      if (al.roadmapId === id) this.db.agentLinks.delete(alid);
+    }
+    for (const [sgid, sg] of this.db.suggestions) {
+      if (sg.roadmapId === id) this.db.suggestions.delete(sgid);
+    }
+    this.db.agentActivity = this.db.agentActivity.filter((a) => a.roadmapId !== id);
     this.db.inviteTokens.delete(id);
     for (const [uid, st] of this.db.userState) {
       if (st.lastRoadmapId === id) {
@@ -410,5 +430,112 @@ export class MemoryStore implements Store {
       }
     }
     return null;
+  }
+
+  async createAgentLink(roadmapId: string, name: string, role: AgentRole, token: string) {
+    const link: AgentLink = {
+      id: randomUUID(),
+      roadmapId,
+      token,
+      name,
+      role,
+      createdAt: now(),
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    this.db.agentLinks.set(link.id, link);
+    return link;
+  }
+
+  async listAgentLinks(roadmapId: string) {
+    return [...this.db.agentLinks.values()]
+      .filter((l) => l.roadmapId === roadmapId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async getAgentLink(id: string) {
+    return this.db.agentLinks.get(id) ?? null;
+  }
+
+  async findAgentLinkByToken(token: string) {
+    return [...this.db.agentLinks.values()].find((l) => l.token === token) ?? null;
+  }
+
+  async revokeAgentLink(id: string) {
+    const l = this.db.agentLinks.get(id);
+    if (!l) throw new Error('agent link not found');
+    this.db.agentLinks.set(id, { ...l, revokedAt: now() });
+  }
+
+  async touchAgentLink(id: string) {
+    const l = this.db.agentLinks.get(id);
+    if (!l) throw new Error('agent link not found');
+    this.db.agentLinks.set(id, { ...l, lastUsedAt: now() });
+  }
+
+  async createSuggestion(input: {
+    roadmapId: string;
+    agentLinkId: string;
+    kind: SuggestionKind;
+    targetId: string | null;
+    payload: Record<string, unknown>;
+    rationale: string;
+  }) {
+    const s: Suggestion = {
+      id: randomUUID(),
+      ...input,
+      status: 'pending',
+      resolvedBy: null,
+      resolvedAt: null,
+      createdAt: now(),
+    };
+    this.db.suggestions.set(s.id, s);
+    return s;
+  }
+
+  async listSuggestions(roadmapId: string) {
+    return [...this.db.suggestions.values()]
+      .filter((s) => s.roadmapId === roadmapId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listSuggestionsByLink(agentLinkId: string) {
+    return [...this.db.suggestions.values()]
+      .filter((s) => s.agentLinkId === agentLinkId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getSuggestion(id: string) {
+    return this.db.suggestions.get(id) ?? null;
+  }
+
+  async resolveSuggestion(id: string, status: 'accepted' | 'rejected', resolvedBy: string) {
+    const s = this.db.suggestions.get(id);
+    if (!s) throw new Error('suggestion not found');
+    const resolved: Suggestion = { ...s, status, resolvedBy, resolvedAt: now() };
+    this.db.suggestions.set(id, resolved);
+    return resolved;
+  }
+
+  async countPendingSuggestions(agentLinkId: string) {
+    return [...this.db.suggestions.values()].filter(
+      (s) => s.agentLinkId === agentLinkId && s.status === 'pending',
+    ).length;
+  }
+
+  async logAgentActivity(entry: {
+    agentLinkId: string;
+    roadmapId: string;
+    action: string;
+    detail: Record<string, unknown>;
+  }) {
+    this.db.agentActivity.push({ id: randomUUID(), ...entry, createdAt: now() });
+  }
+
+  async listAgentActivity(agentLinkId: string, limit: number) {
+    return this.db.agentActivity
+      .filter((a) => a.agentLinkId === agentLinkId)
+      .slice(-limit)
+      .reverse();
   }
 }
