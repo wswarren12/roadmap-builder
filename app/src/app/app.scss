@@ -1133,3 +1133,102 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- Agent links (agent-links design) ---- */
+
+.agent-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  background: var(--background-brand-soft);
+  border-bottom: 1px solid var(--border-neutral-subtle);
+  color: var(--foreground-neutral-primary);
+  font-size: 14px;
+}
+
+.agent-view-header {
+  padding: 16px 24px 0;
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--foreground-neutral-secondary);
+  }
+}
+
+.agent-grid {
+  margin: 16px 24px 32px;
+  border: 1px solid var(--border-neutral-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.agent-grid-months {
+  display: flex;
+  background: var(--background-neutral-subtle);
+  border-bottom: 1px solid var(--border-neutral-subtle);
+  font-size: 12px;
+  color: var(--foreground-neutral-secondary);
+
+  .agent-grid-month {
+    padding: 6px 8px;
+    border-left: 1px solid var(--border-neutral-xsubtle);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+}
+
+.agent-grid-label {
+  flex: 0 0 160px;
+  width: 160px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground-neutral-primary);
+}
+
+.agent-grid-row {
+  display: flex;
+  border-bottom: 1px solid var(--border-neutral-xsubtle);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.agent-grid-lanes {
+  position: relative;
+  flex: 1;
+}
+
+.agent-bar {
+  position: absolute;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+
+  .agent-bar-title {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Pending agent suggestions render as unfilled dotted "ghost" bars. */
+.ghost-bar {
+  background: transparent !important;
+  border: 2px dashed var(--foreground-neutral-tertiary);
+  color: var(--foreground-neutral-secondary);
+  cursor: pointer;
+}
