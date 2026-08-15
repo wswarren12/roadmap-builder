@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 export function GET() {
   const misconfigured =
     process.env.DEV_AUTH !== '1' &&
+    !process.env.DATABASE_URL &&
     !(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (misconfigured) {
     return NextResponse.json(

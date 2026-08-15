@@ -16,8 +16,12 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.mjs ./
+COPY --from=builder /app/db ./db
 
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# db/migrate.js applies schema + the one-time Supabase→Postgres data copy
+# before the server starts (no-op without DATABASE_URL). It exits before Next
+# binds $PORT; a migration failure fails the deploy loudly.
+CMD ["sh", "-c", "node db/migrate.js && npm start"]
