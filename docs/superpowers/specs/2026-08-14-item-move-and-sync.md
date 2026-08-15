@@ -21,10 +21,17 @@ Scenario: Move an item to another initiative from the drill-down
   Then the roadmap view shows I's bar in the "Growth" row
 
 Scenario: Import an item from another roadmap
-  Given member M can read roadmap A (item I with 2 sprints) and write roadmap B
+  Given member M can WRITE roadmap A (item I with 2 sprints) and roadmap B
   When M clicks "Import from other roadmap" in B's item modal, picks A then I
   Then B gains an item identical to I (title, dates, DRI, sprints, …)
   And both copies share a sync_group_id; each sprint pair shares one too
+
+Scenario: Read access on the source is not enough (security)
+  Given member V is only a viewer of roadmap A but owns roadmap B
+  When V tries to import A's item into B
+  Then the import is rejected 403 — a link is a two-way edit channel, so
+  creating one is a write operation on BOTH roadmaps (otherwise a viewer
+  could edit A's items through their own copy)
 
 Scenario: Edits propagate to every linked copy
   Given linked copies I_A and I_B

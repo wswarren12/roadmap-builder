@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { OWNER, STRANGER, freshStore, json, reqAs, seedRoadmap } from './harness';
+import { OWNER, STRANGER, VIEWER, freshStore, json, reqAs, seedRoadmap } from './harness';
 import * as importRoute from '@/app/api/roadmaps/[id]/items/import/route';
 import * as itemRoute from '@/app/api/items/[id]/route';
 import * as itemSprintsRoute from '@/app/api/items/[id]/sprints/route';
@@ -88,6 +88,21 @@ describe('F-15 cross-roadmap synced items', () => {
       { params: { id: strangerMap.id } },
     );
     expect(noSource.status).toBe(404);
+
+    // read-only access to the source must NOT create a link: the copy would
+    // be a write channel back into the source roadmap (privilege escalation)
+    const viewerMap = await store.createRoadmap(
+      { uid: VIEWER.uid, email: VIEWER.email },
+      { title: 'Viewer map', startMonth: '2026-07-01', endMonth: '2026-12-01' },
+    );
+    const viewerIni = await store.createInitiative(viewerMap.id, 'Mine');
+    const readOnlySource = await importRoute.POST(
+      reqAs(VIEWER, 'POST', { sourceItemId: item.id, initiativeId: viewerIni.id }),
+      { params: { id: viewerMap.id } },
+    );
+    expect(readOnlySource.status).toBe(403);
+    expect((await json(readOnlySource)).error).toContain('edit access');
+    expect((await store.getItem(item.id))!.syncGroupId).toBeNull(); // untouched
 
     // initiative from another roadmap
     const badIni = await importRoute.POST(

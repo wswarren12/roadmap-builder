@@ -17,6 +17,14 @@ import type { ItemInput, RoadmapItem, SprintInput, SprintItem } from './types';
  * Dates propagate verbatim. Import validates the initial fit against the
  * target roadmap's range; later edits are validated against the roadmap the
  * edit was made on (same trust model as a human editor on that roadmap).
+ *
+ * AUTHORIZATION MODEL: these wrappers propagate without re-checking the
+ * caller's role on sibling roadmaps. That is safe ONLY because creating a
+ * link requires WRITE on both roadmaps (see the import route): every sync
+ * group therefore spans roadmaps whose write-holders explicitly opted into
+ * shared editing, like a co-owned document embedded in two workspaces. Any
+ * new way of creating links MUST keep that invariant, or these wrappers
+ * become a privilege-escalation channel (read-on-source → write-on-source).
  */
 
 /** Content fields that mirror across copies — everything except placement. */

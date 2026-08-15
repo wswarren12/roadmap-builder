@@ -72,7 +72,8 @@ function ImportPicker({
     <div className="sprint-card-fields" data-testid="import-picker">
       <p className="confirm-message">
         Pick an item from another roadmap. The imported item stays linked:
-        editing it on either roadmap updates both.
+        editing it on either roadmap updates both, so you need edit access on
+        both roadmaps.
       </p>
       <div>
         <label className="form-label" htmlFor="import-roadmap">

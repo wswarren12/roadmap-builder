@@ -14,9 +14,13 @@ interface Params {
 /**
  * Import an item (with its sprints) from another roadmap as a linked copy
  * (F-15b). The copies share a sync group from then on — see lib/sync.ts.
- * Requires write on the target roadmap and at least read on the source.
- * Source-roadmap 404s (not 403s) when the caller can't see it, so the
- * endpoint doesn't confirm foreign roadmap ids.
+ *
+ * Requires WRITE on both roadmaps: linking creates a permanent two-way edit
+ * channel (edits to either copy propagate), so it is a write operation on
+ * the source as much as the target. Read access is deliberately NOT enough —
+ * otherwise a viewer could import an item into their own roadmap and edit
+ * the original through the link. Invisible source roadmaps 404 (not 403),
+ * so the endpoint doesn't confirm foreign roadmap ids.
  */
 export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRoadmap(req, params.id, 'write');
@@ -37,8 +41,15 @@ export async function POST(req: Request, { params }: Params) {
 
   const sourceRoadmap = await store.getRoadmap(source.roadmapId);
   if (!sourceRoadmap) return jsonError(404, 'The item to import no longer exists');
-  if ((await roleForRoadmap(identity, sourceRoadmap)) === 'none') {
+  const sourceRole = await roleForRoadmap(identity, sourceRoadmap);
+  if (sourceRole === 'none') {
     return jsonError(404, 'The item to import no longer exists');
+  }
+  if (sourceRole !== 'owner' && sourceRole !== 'editor') {
+    return jsonError(
+      403,
+      'You need edit access on the source roadmap to import its items — imported items stay linked for shared editing',
+    );
   }
 
   const initiative = await store.getInitiative(initiativeId);
