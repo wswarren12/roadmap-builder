@@ -37,16 +37,25 @@ const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
  */
 function ImportPicker({
   currentRoadmapId,
+  initiatives,
+  defaultInitiativeId,
   onImport,
   onBack,
 }: {
   currentRoadmapId: string;
-  onImport: (sourceItemId: string) => Promise<void>;
+  /** The TARGET roadmap's initiatives — the source's categories are
+   *  irrelevant; the member picks where the copy lands here. */
+  initiatives: Initiative[];
+  defaultInitiativeId: string;
+  onImport: (sourceItemId: string, initiativeId: string) => Promise<void>;
   onBack: () => void;
 }) {
   const [roadmaps, setRoadmaps] = useState<Roadmap[] | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [items, setItems] = useState<RoadmapItem[] | null>(null);
+  const [targetInitiativeId, setTargetInitiativeId] = useState(
+    defaultInitiativeId || initiatives[0]?.id || '',
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,8 +82,27 @@ function ImportPicker({
       <p className="confirm-message">
         Pick an item from another roadmap. The imported item stays linked:
         editing it on either roadmap updates both, so you need edit access on
-        both roadmaps.
+        both roadmaps. The two roadmaps don&apos;t need matching initiatives —
+        choose where the item lands here.
       </p>
+      <div>
+        <label className="form-label" htmlFor="import-initiative">
+          Into initiative
+        </label>
+        <select
+          id="import-initiative"
+          className="row-name-input"
+          value={targetInitiativeId}
+          onChange={(e) => setTargetInitiativeId(e.target.value)}
+          data-testid="import-initiative"
+        >
+          {initiatives.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div>
         <label className="form-label" htmlFor="import-roadmap">
           Roadmap
@@ -119,7 +147,7 @@ function ImportPicker({
                   setError(null);
                   setBusyId(item.id);
                   try {
-                    await onImport(item.id);
+                    await onImport(item.id, targetInitiativeId);
                   } catch (e) {
                     setError(
                       e instanceof ApiError ? e.message : 'Import failed — please retry',
@@ -216,7 +244,9 @@ export function ItemFormModal({
       >
         <ImportPicker
           currentRoadmapId={roadmap.id}
-          onImport={(sourceItemId) => onImport(sourceItemId, values.initiativeId)}
+          initiatives={initiatives}
+          defaultInitiativeId={values.initiativeId}
+          onImport={onImport}
           onBack={() => setImporting(false)}
         />
       </Modal>

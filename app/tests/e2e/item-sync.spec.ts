@@ -44,18 +44,27 @@ test.describe('F-15b: import from other roadmap with permanent sync', () => {
     const itemId = await seedItem(request, owner, a, { title: 'Shared API work' });
     await seedSprint(request, owner, itemId, { name: 'Sprint zero' });
     const b = await seedRoadmap(request, owner, { title: 'Target roadmap' });
+    // B's initiatives share nothing with A's — imports must not care
+    const ops = await (
+      await apiAs(request, owner, 'post', `/api/roadmaps/${b.roadmapId}/initiatives`, {
+        name: 'Ops',
+      })
+    ).json();
 
-    // import via the modal's secondary button
+    // import via the modal's secondary button, choosing the target initiative
     await page.goto(`/roadmaps/${b.roadmapId}`);
     await page.getByTestId('add-item').first().click(); // opens the new-item modal
     await page.getByTestId('open-import').click();
+    await page.getByTestId('import-initiative').selectOption({ label: 'Ops' });
     await page.getByTestId('import-roadmap').selectOption({ label: 'Source roadmap' });
     await expect(page.getByTestId('import-item-row')).toContainText('Shared API work');
     await page.getByTestId('import-item').click();
 
-    // the linked copy appears on B
+    // the linked copy appears on B, in the chosen "Ops" row
     await expect(page.getByTestId('item-bar')).toHaveCount(1);
     await expect(page.getByTestId('item-bar')).toContainText('Shared API work');
+    const opsRow = page.locator(`[data-row-initiative-id="${ops.initiative.id}"]`);
+    await expect(opsRow.getByTestId('item-bar')).toHaveCount(1);
 
     // edit the copy on B → the original on A follows (title + dates)
     const bItems = await (await apiAs(request, owner, 'get', `/api/roadmaps/${b.roadmapId}`)).json();

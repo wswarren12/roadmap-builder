@@ -33,6 +33,14 @@ Scenario: Read access on the source is not enough (security)
   creating one is a write operation on BOTH roadmaps (otherwise a viewer
   could edit A's items through their own copy)
 
+Scenario: Initiatives never need to match between roadmaps
+  Given roadmap A's initiatives are "Onboarding"/"Growth" and roadmap B's are
+  "Delivery"/"Ops" (no overlap)
+  When importing A's item into B, the picker offers B's initiatives in an
+  explicit "Into initiative" dropdown
+  Then the copy lands in the chosen B initiative and each copy keeps its own
+  initiative independently thereafter
+
 Scenario: Edits propagate to every linked copy
   Given linked copies I_A and I_B
   When anyone updates I_A's title, dates, status, DRI, or a sprint
