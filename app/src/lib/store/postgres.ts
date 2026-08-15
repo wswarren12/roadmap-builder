@@ -1,3 +1,4 @@
+import { readFileSync, existsSync } from 'fs';
 import { Pool, types as pgTypes } from 'pg';
 import type {
   AgentActivityEntry,
@@ -168,6 +169,26 @@ function mapAgentActivity(r: any): AgentActivityEntry {
   };
 }
 
+/**
+ * TLS for the PLN-managed RDS. `pg` ignores ?sslmode= in the URL, so the ssl
+ * option is set explicitly (deploy skill contract). When a CA bundle is
+ * provided via PGSSLROOTCERT the connection is strictly verified; without
+ * one (the platform distributes none today) it is encrypted but unverified —
+ * the kit-documented setting for this managed instance. `sslmode=disable`
+ * in the URL opts out entirely for local/test Postgres. The mode is fixed at
+ * boot by configuration — there is deliberately no runtime downgrade path.
+ */
+export function sslConfig(
+  connectionString: string,
+): { ca?: string; rejectUnauthorized: boolean } | undefined {
+  if (connectionString.includes('sslmode=disable')) return undefined;
+  const caPath = process.env.PGSSLROOTCERT;
+  if (caPath && existsSync(caPath)) {
+    return { ca: readFileSync(caPath, 'utf8'), rejectUnauthorized: true };
+  }
+  return { rejectUnauthorized: false };
+}
+
 const TOKEN_COLUMN: Record<ShareRole, string> = {
   viewer: 'invite_token',
   editor: 'editor_invite_token',
@@ -219,14 +240,7 @@ export class PostgresStore implements Store {
   private pool: Pool;
 
   constructor(connectionString: string) {
-    // PLN RDS requires TLS and `pg` ignores ?sslmode= in the URL — the ssl
-    // option is the platform-documented setup (deploy skill). No CA bundle
-    // is distributed to apps, hence no strict verification. sslmode=disable
-    // in the URL opts out for local/test Postgres only.
-    const ssl = connectionString.includes('sslmode=disable')
-      ? undefined
-      : { rejectUnauthorized: false };
-    this.pool = new Pool({ connectionString, ssl });
+    this.pool = new Pool({ connectionString, ssl: sslConfig(connectionString) });
   }
 
   private async one<T>(sql: string, params: unknown[], map: (r: any) => T): Promise<T | null> {

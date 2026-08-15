@@ -161,10 +161,17 @@ async function main() {
     log('skipped reason=no-DATABASE_URL (memory/supabase mode)');
     return;
   }
-  // PLN RDS requires TLS; `pg` ignores ?sslmode= in the URL, so the option is
-  // set explicitly (deploy skill, "Apps that want a provisioned database").
-  // sslmode=disable in the URL opts out for local/test Postgres only.
-  const ssl = url.includes('sslmode=disable') ? undefined : { rejectUnauthorized: false };
+  // TLS: strict verification when PGSSLROOTCERT provides a CA bundle;
+  // otherwise encrypted-but-unverified per the PLN platform contract (no CA
+  // is distributed to apps). sslmode=disable opts out for local/test only.
+  let ssl;
+  if (!url.includes('sslmode=disable')) {
+    const caPath = process.env.PGSSLROOTCERT;
+    ssl =
+      caPath && fs.existsSync(caPath)
+        ? { ca: fs.readFileSync(caPath, 'utf8'), rejectUnauthorized: true }
+        : { rejectUnauthorized: false };
+  }
   const pool = new Pool({ connectionString: url, ssl });
   try {
     await applyMigrations(pool);
