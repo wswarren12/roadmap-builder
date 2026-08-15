@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { ITEM_PALETTE } from '../colors';
 import { getStore } from '../store';
+import { createSprintSynced, updateItemSynced, updateSprintSynced } from '../sync';
 import type { ItemStatus, Roadmap } from '../types';
 import {
   MAX_INITIATIVES,
@@ -322,7 +323,7 @@ export async function executeAgentTool(
       ] as const) {
         if (input[key] !== undefined) patch[key] = String(input[key] ?? '');
       }
-      const updated = await store.updateItem(item.id, patch);
+      const updated = await updateItemSynced(item.id, patch);
       return {
         result: JSON.stringify({ id: updated.id, title: updated.title }),
         action: { tool: name, summary: `Updated item "${updated.title}"` },
@@ -350,7 +351,7 @@ export async function executeAgentTool(
         input.endDate as string,
       );
       if (msErr) return err(msErr.message);
-      const sprint = await store.createSprint(item.id, {
+      const sprint = await createSprintSynced(item, {
         name: sprintName,
         description: String(input.description ?? ''),
         startDate: input.startDate as string,
@@ -397,7 +398,7 @@ export async function executeAgentTool(
       for (const key of ['description', 'dri', 'kpi', 'milestoneText'] as const) {
         if (input[key] !== undefined) patch[key] = String(input[key] ?? '');
       }
-      const updated = await store.updateSprint(sprint.id, patch);
+      const updated = await updateSprintSynced(sprint.id, patch);
       return {
         result: JSON.stringify({ id: updated.id, name: updated.name }),
         action: { tool: name, summary: `Updated sprint "${updated.name}"` },

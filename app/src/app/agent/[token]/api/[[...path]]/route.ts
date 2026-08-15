@@ -13,6 +13,7 @@ import {
 import { SUGGESTION_KINDS, validateSuggestion } from '@/lib/agent-links/suggestions';
 import { executeAgentTool } from '@/lib/agent/tools';
 import { getStore } from '@/lib/store';
+import { deleteSprintSynced } from '@/lib/sync';
 import type { SuggestionKind } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -261,7 +262,7 @@ async function handle(req: Request, { params }: Params): Promise<Response> {
       if (!sprint || !parent || parent.roadmapId !== auth.roadmap.id) {
         return jsonError(404, 'This sprint item no longer exists');
       }
-      await store.deleteSprint(sprint.id);
+      await deleteSprintSynced(sprint);
       await log('edit', { tool: 'delete_sprint', summary: `Deleted sprint "${sprint.name}"` });
       return NextResponse.json({ ok: true });
     }

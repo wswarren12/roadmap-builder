@@ -18,7 +18,7 @@ import {
 } from '@/lib/dates';
 import { assignLanes } from '@/lib/stacking';
 import { driAvatars } from '@/lib/team';
-import type { Roadmap, RoadmapItem, Role, SprintItem, TeamMember } from '@/lib/types';
+import type { Initiative, Roadmap, RoadmapItem, Role, SprintItem, TeamMember } from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
 import { exportItemPdf } from '@/lib/client/pdf';
 import { Bar } from './Bar';
@@ -38,6 +38,8 @@ interface ItemData {
   sprints: SprintItem[];
   roadmap: Roadmap;
   initiativeName: string;
+  /** All initiatives on the roadmap — the edit modal moves items (F-15a). */
+  initiatives: Initiative[];
   role: Role;
 }
 
@@ -266,12 +268,14 @@ export function SubcalendarView({
   }
 
   async function saveItemEdit(values: ItemFormValues) {
-    const res = await api<{ item: RoadmapItem }>(`/api/items/${item.id}`, {
+    await api<{ item: RoadmapItem }>(`/api/items/${item.id}`, {
       method: 'PATCH',
       body: values,
     });
-    setData((d) => (d ? { ...d, item: res.item } : d));
     setEditingItem(false);
+    // Full reload: an initiative move changes the header's initiative name,
+    // and date edits can re-clip the week columns.
+    await load();
   }
 
   async function confirmDeleteItem() {
@@ -538,18 +542,20 @@ export function SubcalendarView({
           open
           onOpenChange={(open) => !open && setEditingItem(false)}
           roadmap={roadmap}
-          initiatives={[
-            {
-              id: item.initiativeId,
-              roadmapId: roadmap.id,
-              name: initiativeName,
-              description: '',
-              position: 1,
-              createdAt: '',
-            },
-          ]}
+          initiatives={data.initiatives}
           editing={item}
           onSave={saveItemEdit}
+          onImport={async (sourceItemId, initiativeId) => {
+            const res = await api<{ item: RoadmapItem }>(
+              `/api/roadmaps/${roadmap.id}/items/import`,
+              { method: 'POST', body: { sourceItemId, initiativeId } },
+            );
+            setEditingItem(false);
+            toast(
+              'success',
+              `Imported "${res.item.title}" to this roadmap — it stays in sync with the original`,
+            );
+          }}
         />
       )}
 

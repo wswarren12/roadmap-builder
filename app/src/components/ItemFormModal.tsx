@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
-import { rangeEndDate } from '@/lib/dates';
+import { formatRange, rangeEndDate } from '@/lib/dates';
 import type { Initiative, ItemStatus, Roadmap, RoadmapItem } from '@/lib/types';
-import { ApiError } from '@/lib/client/api';
+import { ApiError, api } from '@/lib/client/api';
 import { Modal } from './Modal';
 
 export interface ItemFormValues {
@@ -30,6 +30,120 @@ const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
   { value: 'red', label: 'Red' },
 ];
 
+/**
+ * "Import from other roadmap" picker (F-15b): choose one of the member's
+ * other roadmaps, then one of its items. The parent performs the import —
+ * the created copy stays permanently in sync with the original.
+ */
+function ImportPicker({
+  currentRoadmapId,
+  onImport,
+  onBack,
+}: {
+  currentRoadmapId: string;
+  onImport: (sourceItemId: string) => Promise<void>;
+  onBack: () => void;
+}) {
+  const [roadmaps, setRoadmaps] = useState<Roadmap[] | null>(null);
+  const [sourceId, setSourceId] = useState('');
+  const [items, setItems] = useState<RoadmapItem[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ owned: Roadmap[]; shared: Roadmap[] }>('/api/me/roadmaps')
+      .then((res) =>
+        setRoadmaps(
+          [...res.owned, ...res.shared].filter((r) => r.id !== currentRoadmapId),
+        ),
+      )
+      .catch(() => setError("Couldn't load your roadmaps — please retry"));
+  }, [currentRoadmapId]);
+
+  useEffect(() => {
+    if (!sourceId) return setItems(null);
+    setItems(null);
+    api<{ items: RoadmapItem[] }>(`/api/roadmaps/${sourceId}`)
+      .then((res) => setItems(res.items))
+      .catch(() => setError("Couldn't load that roadmap's items — please retry"));
+  }, [sourceId]);
+
+  return (
+    <div className="sprint-card-fields" data-testid="import-picker">
+      <p className="confirm-message">
+        Pick an item from another roadmap. The imported item stays linked:
+        editing it on either roadmap updates both.
+      </p>
+      <div>
+        <label className="form-label" htmlFor="import-roadmap">
+          Roadmap
+        </label>
+        <select
+          id="import-roadmap"
+          className="row-name-input"
+          value={sourceId}
+          onChange={(e) => setSourceId(e.target.value)}
+          data-testid="import-roadmap"
+        >
+          <option value="">
+            {roadmaps === null ? 'Loading…' : 'Choose a roadmap…'}
+          </option>
+          {(roadmaps ?? []).map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+      </div>
+      {roadmaps !== null && roadmaps.length === 0 && (
+        <span className="max-hint">You have no other roadmaps to import from.</span>
+      )}
+      {sourceId && items === null && <div className="skeleton" style={{ height: 60 }} />}
+      {items !== null &&
+        (items.length === 0 ? (
+          <span className="max-hint">That roadmap has no items yet.</span>
+        ) : (
+          items.map((item) => (
+            <div key={item.id} className="share-row" data-testid="import-item-row">
+              <span>
+                {item.title}
+                <span className="max-hint"> · {formatRange(item.startDate, item.endDate)}</span>
+              </span>
+              <Button
+                variant="primary"
+                styleType="fill"
+                size="xs"
+                loading={busyId === item.id}
+                onClick={async () => {
+                  setError(null);
+                  setBusyId(item.id);
+                  try {
+                    await onImport(item.id);
+                  } catch (e) {
+                    setError(
+                      e instanceof ApiError ? e.message : 'Import failed — please retry',
+                    );
+                  } finally {
+                    setBusyId(null);
+                  }
+                }}
+                data-testid="import-item"
+              >
+                Import
+              </Button>
+            </div>
+          ))
+        ))}
+      {error && <span className="range-error">{error}</span>}
+      <div className="share-add">
+        <Button variant="secondary" styleType="border" onClick={onBack} data-testid="import-back">
+          Back
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Roadmap-item create/edit form (F-2): full field set behind the bar. */
 export function ItemFormModal({
   open,
@@ -40,6 +154,7 @@ export function ItemFormModal({
   editing,
   driSuggestions = [],
   onSave,
+  onImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +165,9 @@ export function ItemFormModal({
   initial?: Partial<ItemFormValues>;
   editing?: RoadmapItem;
   onSave: (values: ItemFormValues) => Promise<void>;
+  /** When set, shows "Import from other roadmap" (F-15b). Receives the source
+   *  item id and the initiative currently selected in this form. */
+  onImport?: (sourceItemId: string, initiativeId: string) => Promise<void>;
 }) {
   const spanEnd = rangeEndDate(roadmap.endMonth);
   const source = editing ?? initial;
@@ -69,6 +187,7 @@ export function ItemFormModal({
   });
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const set = <K extends keyof ItemFormValues>(key: K, value: ItemFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }));
@@ -84,6 +203,23 @@ export function ItemFormModal({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (importing && onImport) {
+    return (
+      <Modal
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Import from other roadmap"
+        wide
+      >
+        <ImportPicker
+          currentRoadmapId={roadmap.id}
+          onImport={(sourceItemId) => onImport(sourceItemId, values.initiativeId)}
+          onBack={() => setImporting(false)}
+        />
+      </Modal>
+    );
   }
 
   return (
@@ -110,6 +246,19 @@ export function ItemFormModal({
         </>
       }
     >
+      {onImport && (
+        <div className="share-add">
+          <Button
+            variant="secondary"
+            styleType="border"
+            size="sm"
+            onClick={() => setImporting(true)}
+            data-testid="open-import"
+          >
+            Import from other roadmap
+          </Button>
+        </div>
+      )}
       <Input
         label="Title"
         value={values.title}

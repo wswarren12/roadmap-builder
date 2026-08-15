@@ -222,10 +222,16 @@ export class MemoryStore implements Store {
     return [...this.db.items.values()].filter((i) => i.initiativeId === initiativeId).length;
   }
 
-  async createItem(roadmapId: string, input: ItemInput, colorIndex: number) {
+  async createItem(
+    roadmapId: string,
+    input: ItemInput,
+    colorIndex: number,
+    syncGroupId: string | null = null,
+  ) {
     const item: RoadmapItem = {
       id: randomUUID(),
       roadmapId,
+      syncGroupId,
       initiativeId: input.initiativeId,
       title: input.title,
       description: input.description ?? '',
@@ -267,6 +273,18 @@ export class MemoryStore implements Store {
     }
   }
 
+  async setItemSyncGroup(id: string, syncGroupId: string) {
+    const i = this.db.items.get(id);
+    if (!i) throw new Error('item not found');
+    this.db.items.set(id, { ...i, syncGroupId });
+  }
+
+  async listItemsBySyncGroup(syncGroupId: string) {
+    return [...this.db.items.values()]
+      .filter((i) => i.syncGroupId === syncGroupId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
   async listSprints(roadmapItemId: string) {
     return [...this.db.sprints.values()]
       .filter((s) => s.roadmapItemId === roadmapItemId)
@@ -281,10 +299,15 @@ export class MemoryStore implements Store {
     return (await this.listSprints(roadmapItemId)).length;
   }
 
-  async createSprint(roadmapItemId: string, input: SprintInput) {
+  async createSprint(
+    roadmapItemId: string,
+    input: SprintInput,
+    syncGroupId: string | null = null,
+  ) {
     const sprint: SprintItem = {
       id: randomUUID(),
       roadmapItemId,
+      syncGroupId,
       name: input.name,
       description: input.description ?? '',
       startDate: input.startDate,
@@ -316,6 +339,18 @@ export class MemoryStore implements Store {
 
   async deleteSprint(id: string) {
     this.db.sprints.delete(id);
+  }
+
+  async setSprintSyncGroup(id: string, syncGroupId: string) {
+    const s = this.db.sprints.get(id);
+    if (!s) throw new Error('sprint not found');
+    this.db.sprints.set(id, { ...s, syncGroupId });
+  }
+
+  async listSprintsBySyncGroup(syncGroupId: string) {
+    return [...this.db.sprints.values()]
+      .filter((s) => s.syncGroupId === syncGroupId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async listShares(roadmapId: string) {

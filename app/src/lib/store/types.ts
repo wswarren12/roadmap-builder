@@ -57,17 +57,31 @@ export interface Store {
   getItem(id: string): Promise<RoadmapItem | null>;
   countItems(roadmapId: string): Promise<number>;
   countItemsInInitiative(initiativeId: string): Promise<number>;
-  createItem(roadmapId: string, input: ItemInput, colorIndex: number): Promise<RoadmapItem>;
+  createItem(
+    roadmapId: string,
+    input: ItemInput,
+    colorIndex: number,
+    syncGroupId?: string | null,
+  ): Promise<RoadmapItem>;
   updateItem(id: string, patch: Partial<ItemInput>): Promise<RoadmapItem>;
   deleteItem(id: string): Promise<void>;
+  // cross-roadmap sync groups (F-15b)
+  setItemSyncGroup(id: string, syncGroupId: string): Promise<void>;
+  listItemsBySyncGroup(syncGroupId: string): Promise<RoadmapItem[]>;
 
   // sprint items
   listSprints(roadmapItemId: string): Promise<SprintItem[]>;
   getSprint(id: string): Promise<SprintItem | null>;
   countSprints(roadmapItemId: string): Promise<number>;
-  createSprint(roadmapItemId: string, input: SprintInput): Promise<SprintItem>;
+  createSprint(
+    roadmapItemId: string,
+    input: SprintInput,
+    syncGroupId?: string | null,
+  ): Promise<SprintItem>;
   updateSprint(id: string, patch: Partial<SprintInput>): Promise<SprintItem>;
   deleteSprint(id: string): Promise<void>;
+  setSprintSyncGroup(id: string, syncGroupId: string): Promise<void>;
+  listSprintsBySyncGroup(syncGroupId: string): Promise<SprintItem[]>;
 
   // shares
   listShares(roadmapId: string): Promise<RoadmapShare[]>;

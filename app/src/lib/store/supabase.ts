@@ -64,6 +64,7 @@ function mapItem(r: any): RoadmapItem {
     status: r.status,
     kpi: r.kpi ?? '',
     colorIndex: r.color_index,
+    syncGroupId: r.sync_group_id ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -81,6 +82,7 @@ function mapSprint(r: any): SprintItem {
     milestoneDate: r.milestone_date,
     kpi: r.kpi ?? '',
     dri: r.dri ?? '',
+    syncGroupId: r.sync_group_id ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -360,11 +362,17 @@ export class SupabaseStore implements Store {
     return count ?? 0;
   }
 
-  async createItem(roadmapId: string, input: ItemInput, colorIndex: number) {
+  async createItem(
+    roadmapId: string,
+    input: ItemInput,
+    colorIndex: number,
+    syncGroupId: string | null = null,
+  ) {
     const res = await this.sb
       .from('roadmap_items')
       .insert({
         roadmap_id: roadmapId,
+        sync_group_id: syncGroupId,
         initiative_id: input.initiativeId,
         title: input.title,
         description: input.description ?? '',
@@ -399,6 +407,24 @@ export class SupabaseStore implements Store {
     if (error) throw new Error(error.message);
   }
 
+  async setItemSyncGroup(id: string, syncGroupId: string) {
+    const { error } = await this.sb
+      .from('roadmap_items')
+      .update({ sync_group_id: syncGroupId })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async listItemsBySyncGroup(syncGroupId: string) {
+    const { data, error } = await this.sb
+      .from('roadmap_items')
+      .select('*')
+      .eq('sync_group_id', syncGroupId)
+      .order('created_at');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapItem);
+  }
+
   async listSprints(roadmapItemId: string) {
     const { data, error } = await this.sb
       .from('sprint_items')
@@ -424,11 +450,16 @@ export class SupabaseStore implements Store {
     return count ?? 0;
   }
 
-  async createSprint(roadmapItemId: string, input: SprintInput) {
+  async createSprint(
+    roadmapItemId: string,
+    input: SprintInput,
+    syncGroupId: string | null = null,
+  ) {
     const res = await this.sb
       .from('sprint_items')
       .insert({
         roadmap_item_id: roadmapItemId,
+        sync_group_id: syncGroupId,
         name: input.name,
         description: input.description ?? '',
         start_date: input.startDate,
@@ -456,6 +487,24 @@ export class SupabaseStore implements Store {
   async deleteSprint(id: string) {
     const { error } = await this.sb.from('sprint_items').delete().eq('id', id);
     if (error) throw new Error(error.message);
+  }
+
+  async setSprintSyncGroup(id: string, syncGroupId: string) {
+    const { error } = await this.sb
+      .from('sprint_items')
+      .update({ sync_group_id: syncGroupId })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  async listSprintsBySyncGroup(syncGroupId: string) {
+    const { data, error } = await this.sb
+      .from('sprint_items')
+      .select('*')
+      .eq('sync_group_id', syncGroupId)
+      .order('created_at');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapSprint);
   }
 
   async listShares(roadmapId: string) {

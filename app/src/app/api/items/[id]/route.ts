@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
+import { updateItemSynced } from '@/lib/sync';
 import type { ItemInput, ItemStatus } from '@/lib/types';
 import {
   requireNonEmpty,
@@ -26,9 +27,10 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRoadmap(req, item.roadmapId, 'read');
   if (auth instanceof NextResponse) return auth;
 
-  const [sprints, initiative] = await Promise.all([
+  const [sprints, initiative, initiatives] = await Promise.all([
     store.listSprints(item.id),
     store.getInitiative(item.initiativeId),
+    store.listInitiatives(item.roadmapId),
   ]);
 
   return NextResponse.json({
@@ -36,6 +38,8 @@ export async function GET(req: Request, { params }: Params) {
     sprints,
     roadmap: auth.roadmap,
     initiativeName: initiative?.name ?? '',
+    // Full list so the edit modal can move the item between initiatives (F-15a).
+    initiatives,
     role: auth.role,
   });
 }
@@ -99,7 +103,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (msErr) return jsonError(400, msErr.message, msErr.field);
   if (body.milestoneDate !== undefined) patch.milestoneDate = milestoneDate || null;
 
-  const updated = await store.updateItem(item.id, patch);
+  const updated = await updateItemSynced(item.id, patch);
   const sprintCount = await store.countSprints(item.id);
   return NextResponse.json({ item: { ...updated, sprintCount } });
 }

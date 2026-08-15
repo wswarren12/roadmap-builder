@@ -50,6 +50,9 @@ export interface RoadmapItem {
   status: ItemStatus;
   kpi: string;
   colorIndex: number;
+  /** Cross-roadmap link (F-15b): rows sharing a group are the same item
+   *  imported into several roadmaps; content edits propagate group-wide. */
+  syncGroupId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +68,8 @@ export interface SprintItem {
   milestoneDate: string | null;
   kpi: string;
   dri: string;
+  /** Linked-sprint group across imported item copies (F-15b). */
+  syncGroupId: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -1013,6 +1013,18 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             await saveItem(values, itemForm.editing);
             setItemForm(null);
           }}
+          onImport={async (sourceItemId, initiativeId) => {
+            const res = await api<{ item: ItemWithCount }>(
+              `/api/roadmaps/${roadmap.id}/items/import`,
+              { method: 'POST', body: { sourceItemId, initiativeId } },
+            );
+            setData((d) => (d ? { ...d, items: [...d.items, res.item] } : d));
+            setItemForm(null);
+            toast(
+              'success',
+              `Imported "${res.item.title}" — it stays in sync with the other roadmap`,
+            );
+          }}
         />
       )}
 

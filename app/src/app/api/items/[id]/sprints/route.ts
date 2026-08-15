@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
+import { createSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
 import {
   requireNonEmpty,
@@ -52,6 +53,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     dri: typeof body.dri === 'string' ? body.dri : '',
   };
 
-  const sprint = await store.createSprint(item.id, input);
+  const sprint = await createSprintSynced(item, input);
   return NextResponse.json({ sprint }, { status: 201 });
 }

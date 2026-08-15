@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
+import { deleteSprintSynced, updateSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
 import {
   requireNonEmpty,
@@ -60,7 +61,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (msErr) return jsonError(400, msErr.message, msErr.field);
   if (body.milestoneDate !== undefined) patch.milestoneDate = milestoneDate || null;
 
-  const updated = await store.updateSprint(sprint.id, patch);
+  const updated = await updateSprintSynced(sprint.id, patch);
   return NextResponse.json({ sprint: updated });
 }
 
@@ -74,6 +75,6 @@ export async function DELETE(req: Request, { params }: Params) {
   const auth = await authorizeRoadmap(req, item.roadmapId, 'write');
   if (auth instanceof NextResponse) return auth;
 
-  await store.deleteSprint(sprint.id);
+  await deleteSprintSynced(sprint);
   return NextResponse.json({ ok: true });
 }
