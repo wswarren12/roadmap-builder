@@ -1,14 +1,14 @@
 # Multi-stage build: Next.js 14 app. Contract: listen on $PORT, bind 0.0.0.0,
 # answer GET /health, stay iframe-embeddable from *.plnetwork.io.
 
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./

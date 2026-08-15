@@ -39,15 +39,34 @@ const COPY_TABLES = [
 
 const BATCH = 500;
 
+/** Postgres error codes for "this object already exists". A migration that
+ *  fails ONLY because its objects are already present (e.g. a prior boot's
+ *  partially-ledgered run, or a replica that raced before the advisory lock
+ *  existed) is reconciled into the ledger instead of crash-looping. */
+const DUPLICATE_CODES = new Set([
+  '42P07', // duplicate_table
+  '42710', // duplicate_object (types, constraints)
+  '42701', // duplicate_column
+  '42P06', // duplicate_schema
+  '42723', // duplicate_function
+]);
+
 async function applyMigrations(pool) {
+  const ctx = await pool.query(
+    'SELECT current_database() AS db, current_schema() AS schema, current_user AS usr',
+  );
+  log(
+    `context db=${ctx.rows[0].db} schema=${ctx.rows[0].schema} user=${ctx.rows[0].usr}`,
+  );
   await pool.query(`CREATE TABLE IF NOT EXISTS _pln_migrations (
     filename TEXT PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
   const dir = path.join(__dirname, 'migrations');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  const { rows } = await pool.query('SELECT filename FROM _pln_migrations');
+  const { rows } = await pool.query('SELECT filename FROM _pln_migrations ORDER BY filename');
   const done = new Set(rows.map((r) => r.filename));
+  log(`ledger=[${[...done].join(',') || 'empty'}]`);
   for (const file of files) {
     if (done.has(file)) continue;
     const sql = fs.readFileSync(path.join(dir, file), 'utf8');
@@ -60,7 +79,16 @@ async function applyMigrations(pool) {
       log(`migration=${file} status=applied`);
     } catch (e) {
       await client.query('ROLLBACK');
-      throw new Error(`migration ${file} failed: ${e.message}`);
+      if (DUPLICATE_CODES.has(e.code)) {
+        // Objects already exist but the ledger missed them — reconcile.
+        await client.query(
+          'INSERT INTO _pln_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
+          [file],
+        );
+        log(`migration=${file} status=reconciled (objects already existed: ${e.message})`);
+      } else {
+        throw new Error(`migration ${file} failed: ${e.message}`);
+      }
     } finally {
       client.release();
     }
@@ -172,11 +200,22 @@ async function main() {
         ? { ca: fs.readFileSync(caPath, 'utf8'), rejectUnauthorized: true }
         : { rejectUnauthorized: false };
   }
-  const pool = new Pool({ connectionString: url, ssl });
+  // NOT max:1 — the lock holds one connection for the whole run while the
+  // migration/copy queries need their own.
+  const pool = new Pool({ connectionString: url, ssl, max: 4 });
+  const client = await pool.connect();
   try {
+    // Only one container may migrate/copy at a time: rolling deploys boot
+    // replicas concurrently, and two runners racing on DDL is exactly how a
+    // schema ends up ahead of its ledger. Session-scoped lock, held for the
+    // whole run, released with the connection.
+    log('acquiring migration lock…');
+    await client.query('SELECT pg_advisory_lock(727270001)');
+    log('migration lock acquired');
     await applyMigrations(pool);
     await copyData(pool);
   } finally {
+    client.release();
     await pool.end();
   }
 }
