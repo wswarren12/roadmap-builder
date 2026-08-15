@@ -1,4 +1,4 @@
-# PLN AI Apps — Starter Kit v1.4
+# PLN AI Apps — Starter Kit v1.8
 
 Welcome! This kit lets you vibe-code an app with your AI assistant and deploy it
 to the Protocol Labs Network sandbox with a single instruction.
@@ -8,13 +8,18 @@ to the Protocol Labs Network sandbox with a single instruction.
 - `.claude/skills/deploy-to-labs/` — the deploy skill your agent uses.
 - `.claude/skills/app-metadata/` — how your agent names/describes your app and
   adds an optional one-pager PRD (always with your approval).
+- `.claude/skills/app-logs/` — how your agent reads your app's build and
+  runtime logs to diagnose failed deploys and runtime errors.
 - `.claude/skills/pl-design-system/` — how to build on-brand UI with the PL Design System.
 - `.claude/skills/pln-member-context/` — how your app can know which PLN member is using it.
+- `.claude/skills/db-migration/` — for apps that already have their own database, how your
+  agent migrates it — structure and, by default, your existing data — onto a
+  PLN-provisioned Postgres database.
 - `pln-app.config.json` — the LabOS connect + deploy endpoints (no secrets).
 - `pl-design-system/` — the **PL Design System**: ready-made React components
-  (Button, MemberCard, TeamCard, Table, Tabs, Badge, PageHeader, SearchInput,
-  Pagination, …), SCSS design tokens, the Inter font, and `USAGE.md` /
-  `guidelines.md`. Your agent uses these instead of hand-building UI.
+  (Button, EntityCard, PageShell, Table, Tabs, Tag, Badge, SearchInput, …),
+  Tailwind v4 semantic tokens, and `USAGE.md` / `guidelines.md`. Your agent
+  uses these instead of hand-building UI.
 - `styles/` — a tiny CSS-variable fallback (`pln-theme.css`) for plain-HTML apps
   that don't use React, plus font guidance.
 - `app/` — a minimal runnable Node app to start from (its `server.js`,
@@ -34,7 +39,7 @@ to the Protocol Labs Network sandbox with a single instruction.
    link to open and approve — sign in and click **Approve** to authorize the
    deploy. Your agent then ships the app to the PLN sandbox; the first deploy
    can take a minute or two.
-4. Your app appears on the PL Infra → AI Apps dashboard, where you can open it. 
+4. Your app appears on the PL Infra → AI Apps dashboard, where you can open it.
    After the first deploy your agent offers an optional **one-pager PRD** — a
    short product brief (why the app exists and what it does) shown with your
    app; say yes and approve the draft, or skip it. You can rename your app,
@@ -43,9 +48,9 @@ to the Protocol Labs Network sandbox with a single instruction.
 
 ## Apps that need an API key or password (secrets)
 Some apps need a secret to work — for example an app that talks to ChatGPT/OpenAI,
-sends emails, or connects to a database needs an **API key** or password for that
-service. If yours does, the flow is slightly different, and your agent handles it
-for you:
+sends emails, or connects to your own database needs an **API key** or password
+for that service. If yours does, the flow is slightly different, and your agent
+handles it for you:
 
 1. Build your app as usual — just tell your agent what you want (e.g. "an app that
    summarizes news with ChatGPT"). It knows the app will need a key.
@@ -54,11 +59,41 @@ for you:
 3. When it's time to deploy, your agent registers the app as a **draft** and gives
    you a LabOS link. Open it, enter your key(s) in the form there, and click
    **Deploy** — that page is the only place your secrets should ever go.
-4. Updating a key later? Open your app's page in LabOS (PL Infra → AI Apps → your
-   app), click **Update secrets & redeploy**, enter the new value, and Deploy.
+4. Updating a key later? On the PL Infra → AI Apps dashboard, open the **⋯ menu**
+   on your app's card (it's also on the app's own page) and choose **Deployment
+   settings** — click **Replace** on the value you want to change, enter the new
+   one, and click **Redeploy**.
 
 Secrets never go into the code, the chat, or the uploaded ZIP — they are stored
 securely on the sandbox and injected into your app when it runs.
+
+## Apps that need a database
+Some apps need to remember information between visits — a to-do list, a
+leaderboard, a guestbook, anything with data that should still be there next
+time someone opens the app. If yours does, you don't need any technical
+know-how — your agent will ask which of these you want when it's time to deploy:
+
+1. **Let PLN set one up for you (recommended if you don't already have one).**
+   No accounts, no setup, nothing to configure — just tell your agent you'd
+   like one. Your app gets a working database automatically the moment it
+   deploys; you never touch a password or connection string.
+2. **Connect a database you already have.** Treat its connection details the
+   same as any other secret — see "Apps that need an API key or password"
+   above; you'll enter it on that same secure LabOS page.
+
+Either way, you never create the database or generate credentials yourself —
+your agent and PLN handle that part.
+
+**Already have your own database and want to switch?** If you deployed before
+this feature existed (or brought your own on purpose) and would rather PLN
+manage it, just tell your agent — e.g. *"can we move my database to PLN's
+managed one?"*. Your agent looks at how your app is built and carries over
+both your existing tables/structure **and your existing data** automatically —
+one migration, not two separate asks. If you'd rather start the new database
+empty (e.g. a throwaway test app), just say so. Either way, it lets you know
+if anything about your current setup can't come along automatically (some
+database platforms offer extras — like their own login system — that don't
+transfer).
 
 ## Personalized apps (who's using it)
 Your app can know which PLN member opened it. When a signed-in member with AI
@@ -67,6 +102,13 @@ photo, teams, role, skills — to greet them, tag their feedback, or tailor what
 it shows. Just ask your agent, e.g. *"greet me by name and show my team when I
 open the app"*. Visitors who aren't signed in (or lack access) simply get the
 non-personalized version — your app keeps working for them.
+
+## When something breaks
+If a deploy fails or your app misbehaves after deploying, just tell your agent —
+e.g. *"the deploy failed, what happened?"* or *"the app shows an error, check the
+logs"*. Your agent can read your app's **build logs** (what happened while the
+app was being built) and **runtime logs** (what the running app printed),
+diagnose the problem, and fix it — you never need to dig through logs yourself.
 
 ## Embedding in the dashboard
 Your app is shown inside the AI Apps dashboard. Apps built with this kit display
