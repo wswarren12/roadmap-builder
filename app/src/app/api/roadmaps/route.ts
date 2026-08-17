@@ -27,6 +27,13 @@ export async function POST(req: Request) {
     endMonth: body.endMonth as string,
   });
   const initiative = await store.createInitiative(roadmap.id, 'Initiative 1');
+  // The creator is always part of the team: puts them in the DRI drop-down
+  // from the first item onward (they'd otherwise have to add themselves).
+  await store.addTeamMember(roadmap.id, {
+    name: identity.name,
+    memberUid: identity.uid,
+    image: identity.image ?? null,
+  });
   await store.setLastRoadmap(identity.uid, roadmap.id);
 
   return NextResponse.json({ roadmap, initiatives: [initiative] }, { status: 201 });

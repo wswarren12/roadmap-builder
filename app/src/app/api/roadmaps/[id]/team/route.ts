@@ -27,6 +27,15 @@ export async function GET(req: Request, { params }: Params) {
   if (mine && image && mine.image !== image) {
     await store.updateTeamMember(mine.id, { image });
     members = await store.listTeamMembers(params.id);
+  } else if (!mine && auth.role === 'owner') {
+    // Lazy backfill for roadmaps created before creators were auto-added:
+    // the owner joins the roster (and the DRI drop-down) on first load.
+    await store.addTeamMember(params.id, {
+      name: auth.identity.name,
+      memberUid: auth.identity.uid,
+      image,
+    });
+    members = await store.listTeamMembers(params.id);
   }
 
   return NextResponse.json({ members, role: auth.role });

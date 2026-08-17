@@ -149,3 +149,43 @@ describe('team roster (F-13)', () => {
     expect(gone.status).toBe(404);
   });
 });
+
+describe('creator on the roster (2026-08-17): DRI drop-down always offers the creator', () => {
+  let store: MemoryStore;
+  beforeEach(() => {
+    store = freshStore();
+  });
+
+  it('creating a roadmap auto-adds the creator as a team member', async () => {
+    const { POST: createRoadmap } = await import('@/app/api/roadmaps/route');
+    const res = await createRoadmap(
+      reqAs(OWNER, 'POST', {
+        title: 'Creator roster',
+        startMonth: '2026-07-01',
+        endMonth: '2026-12-01',
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { roadmap } = await res.json();
+    const members = await store.listTeamMembers(roadmap.id);
+    expect(members).toHaveLength(1);
+    expect(members[0]).toMatchObject({ name: OWNER.name, memberUid: OWNER.uid });
+  });
+
+  it('owner of a pre-existing roadmap is backfilled on team load; others are not', async () => {
+    const { roadmap } = await seedRoadmap(store); // seeded rosterless, like legacy data
+    expect(await store.listTeamMembers(roadmap.id)).toHaveLength(0);
+
+    // viewer/editor loads never add anyone
+    await getTeam(reqAs(VIEWER), { params: { id: roadmap.id } });
+    await getTeam(reqAs(EDITOR), { params: { id: roadmap.id } });
+    expect(await store.listTeamMembers(roadmap.id)).toHaveLength(0);
+
+    // owner load backfills exactly once
+    await getTeam(reqAs(OWNER), { params: { id: roadmap.id } });
+    await getTeam(reqAs(OWNER), { params: { id: roadmap.id } });
+    const members = await store.listTeamMembers(roadmap.id);
+    expect(members).toHaveLength(1);
+    expect(members[0].memberUid).toBe(OWNER.uid);
+  });
+});

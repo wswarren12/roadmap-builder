@@ -24,14 +24,16 @@ test.describe('F-13 team roster & DRI avatars', () => {
 
     await page.goto(`/roadmaps/${seeded.roadmapId}`);
     await page.getByTestId('team-button').click();
-    await expect(page.getByTestId('team-empty')).toBeVisible();
 
-    // import brings in the requester (an actual LabOS-style user)
-    await page.getByTestId('team-import').click();
+    // the creator is on the roster from the start (2026-08-17) — never empty
     const rows = page.getByTestId('team-member');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(owner.name);
     await expect(rows.first()).toContainText('LabOS');
+
+    // importing access members doesn't duplicate the already-present creator
+    await page.getByTestId('team-import').click();
+    await expect(rows).toHaveCount(1);
 
     // manual add renders an initials avatar ("Maria Garcia" → MG)
     await page.getByTestId('team-add-name').fill('Maria Garcia');
@@ -46,6 +48,15 @@ test.describe('F-13 team roster & DRI avatars', () => {
     await page.getByTestId('team-add').click();
     await expect(page.getByTestId('team-error')).toContainText(/already on the team/i);
     await expect(rows).toHaveCount(2);
+
+    // the creator can pick themselves as DRI: the item form's suggestion
+    // list offers their roster entry (2026-08-17)
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('team-panel')).toBeHidden();
+    await page.getByTestId('add-item').first().click();
+    await expect(
+      page.locator(`#dri-suggestions option[value="${owner.name}"]`),
+    ).toHaveCount(1);
   });
 
   test('DRI avatars appear on item and sprint bars; free-typed DRIs get initials', async ({
@@ -59,12 +70,12 @@ test.describe('F-13 team roster & DRI avatars', () => {
     const itemId = await seedItem(request, owner, seeded, { dris: 'Maria Garcia' });
     await seedSprint(request, owner, itemId, { dri: 'Grace Hopper' });
 
-    // roster: Maria on the team; Grace intentionally NOT on it
+    // roster: creator (auto-added) + Maria; Grace intentionally NOT on it
     await page.goto(`/roadmaps/${seeded.roadmapId}`);
     await page.getByTestId('team-button').click();
     await page.getByTestId('team-add-name').fill('Maria Garcia');
     await page.getByTestId('team-add').click();
-    await expect(page.getByTestId('team-member')).toHaveCount(1);
+    await expect(page.getByTestId('team-member')).toHaveCount(2);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('team-panel')).toBeHidden();
 

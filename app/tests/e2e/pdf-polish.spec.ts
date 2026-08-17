@@ -71,14 +71,21 @@ test.describe('F-9 today line & auto-scroll', () => {
     const owner = makeUser('owner');
     await loginAs(context, owner);
 
-    // Range around today (2026-07): May 2026 – Oct 2026.
+    // Seed relative to the real clock so the test never rots: the item
+    // spans today ±14 days, inside a 5-month range around this month.
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1));
+    const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 1));
     const seeded = await seedRoadmap(request, owner, {
-      startMonth: '2026-05-01',
-      endMonth: '2026-10-01',
+      startMonth: iso(monthStart),
+      endMonth: iso(monthEnd),
     });
     const itemId = await seedItem(request, owner, seeded, {
-      startDate: '2026-07-01',
-      endDate: '2026-08-15',
+      startDate: iso(new Date(now.getTime() - 14 * 86400_000)),
+      endDate: iso(new Date(now.getTime() + 14 * 86400_000)),
+      milestoneText: '',
+      milestoneDate: undefined,
     });
 
     await page.goto(`/roadmaps/${seeded.roadmapId}`);

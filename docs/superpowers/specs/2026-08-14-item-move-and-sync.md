@@ -65,3 +65,17 @@ Scenario: Import guards
 Out of scope: conflict resolution (last write wins — single store), syncing
 via agent editor links is included automatically (they use the same wrappers),
 un-linking copies.
+
+## Addendum (2026-08-17): creator always on the team roster
+
+```gherkin
+Scenario: Roadmap creator can pick themselves as DRI
+  When a member creates a roadmap
+  Then they are automatically on its team roster (uid, name, image)
+  And the DRI drop-down in the item/sprint forms offers their name
+
+Scenario: Existing roadmaps backfill lazily
+  Given a roadmap created before this change whose owner is not on the roster
+  When the owner loads the team (any roadmap view does)
+  Then they are appended to the roster once — viewers/editors are not
+```
