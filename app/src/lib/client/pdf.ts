@@ -1,6 +1,6 @@
 'use client';
 
-import { ITEM_PALETTE, SPRINT_COLOR, STATUS_COLORS, itemColor } from '../colors';
+import { ITEM_PALETTE, STATUS_COLORS, barColor, completedColor, sprintColor } from '../colors';
 import {
   dayOffsetInSpan,
   daysBetween,
@@ -195,7 +195,7 @@ export async function exportRoadmapPdf({
         dayOffsetInSpan(item.startDate, item.endDate, item.milestoneDate) !== null
           ? x + (daysBetween(item.startDate, item.milestoneDate) + 0.5) * scale
           : null;
-      drawBar(doc, x, by, w, LANE_H, itemColor(item.colorIndex), item.title, {
+      drawBar(doc, x, by, w, LANE_H, barColor(item, roadmap.palette), item.title, {
         statusColor: STATUS_COLORS[item.status],
         milestoneX: milestoneOff,
       });
@@ -298,7 +298,10 @@ export async function exportItemPdf({
       dayOffsetInSpan(sprint.startDate, sprint.endDate, sprint.milestoneDate) !== null
         ? x + (daysBetween(sprint.startDate, sprint.milestoneDate) + 0.5) * scale
         : null;
-    drawBar(doc, x, by, w, LANE_H, SPRINT_COLOR, sprint.name, { milestoneX: milestoneOff });
+    const sprintFill = sprint.completedAt
+      ? completedColor(roadmap.palette)
+      : sprintColor(roadmap.palette);
+    drawBar(doc, x, by, w, LANE_H, sprintFill, sprint.name, { milestoneX: milestoneOff });
   }
 
   const todayOff = dayOffsetInSpan(item.startDate, item.endDate, todayISO());

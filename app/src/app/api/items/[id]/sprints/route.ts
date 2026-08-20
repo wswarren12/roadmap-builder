@@ -5,6 +5,7 @@ import { createSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
 import {
   requireNonEmpty,
+  validateCompletedDate,
   validateDatesWithin,
   validateMilestoneDate,
 } from '@/lib/validate';
@@ -42,6 +43,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   );
   if (msErr) return jsonError(400, msErr.message, msErr.field);
 
+  const doneErr = validateCompletedDate(body.completedAt ?? null);
+  if (doneErr) return jsonError(400, doneErr.message, doneErr.field);
+
   const input: SprintInput = {
     name: String(body.name).trim(),
     description: typeof body.description === 'string' ? body.description : '',
@@ -51,6 +55,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     milestoneDate: (body.milestoneDate as string) || null,
     kpi: typeof body.kpi === 'string' ? body.kpi : '',
     dri: typeof body.dri === 'string' ? body.dri : '',
+    completedAt: (body.completedAt as string) || null,
   };
 
   const sprint = await createSprintSynced(item, input);

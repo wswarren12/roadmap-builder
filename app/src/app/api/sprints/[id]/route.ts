@@ -5,6 +5,7 @@ import { deleteSprintSynced, updateSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
 import {
   requireNonEmpty,
+  validateCompletedDate,
   validateDatesWithin,
   validateMilestoneDate,
 } from '@/lib/validate';
@@ -39,6 +40,11 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.kpi !== undefined) patch.kpi = String(body.kpi ?? '');
   if (body.dri !== undefined) patch.dri = String(body.dri ?? '');
   if (body.milestoneText !== undefined) patch.milestoneText = String(body.milestoneText ?? '');
+  if (body.completedAt !== undefined) {
+    const doneErr = validateCompletedDate(body.completedAt);
+    if (doneErr) return jsonError(400, doneErr.message, doneErr.field);
+    patch.completedAt = (body.completedAt as string) || null;
+  }
 
   const startDate = (body.startDate as string) ?? sprint.startDate;
   const endDate = (body.endDate as string) ?? sprint.endDate;

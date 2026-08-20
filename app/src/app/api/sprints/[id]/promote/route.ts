@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: Params) {
       dris: sprint.dri,
       status: 'green',
       kpi: sprint.kpi,
+      completedAt: sprint.completedAt,
     },
     colorIndex,
   );

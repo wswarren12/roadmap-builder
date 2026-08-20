@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { jsonError, readJson, requireIdentity } from '@/lib/api-helpers';
+import { DEFAULT_PALETTE_ID, PALETTES } from '@/lib/colors';
 import { getStore } from '@/lib/store';
 import { requireNonEmpty, validateRoadmapRange } from '@/lib/validate';
 
@@ -19,12 +20,18 @@ export async function POST(req: Request) {
   const rangeErr = validateRoadmapRange(body.startMonth, body.endMonth);
   if (rangeErr) return jsonError(400, rangeErr.message, rangeErr.field);
 
+  const palette = body.palette === undefined ? DEFAULT_PALETTE_ID : String(body.palette);
+  if (!PALETTES.some((p) => p.id === palette)) {
+    return jsonError(400, 'Unknown color palette', 'palette');
+  }
+
   const store = getStore();
   const roadmap = await store.createRoadmap(identity, {
     title: String(body.title).trim(),
     description: typeof body.description === 'string' ? body.description : '',
     startMonth: body.startMonth as string,
     endMonth: body.endMonth as string,
+    palette,
   });
   const initiative = await store.createInitiative(roadmap.id, 'Initiative 1');
   // The creator is always part of the team: puts them in the DRI drop-down

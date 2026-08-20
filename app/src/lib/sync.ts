@@ -40,6 +40,7 @@ const SYNCED_ITEM_FIELDS = [
   'responsibleTeam',
   'status',
   'kpi',
+  'completedAt',
 ] as const;
 
 function syncedItemPatch(patch: Partial<ItemInput>): Partial<ItemInput> {
@@ -146,6 +147,7 @@ export async function importItemLinked(
       responsibleTeam: source.responsibleTeam,
       status: source.status,
       kpi: source.kpi,
+      completedAt: source.completedAt,
     },
     colorIndex,
     groupId,
@@ -167,6 +169,7 @@ export async function importItemLinked(
         milestoneDate: sprint.milestoneDate,
         kpi: sprint.kpi,
         dri: sprint.dri,
+        completedAt: sprint.completedAt,
       },
       sprintGroup,
     );

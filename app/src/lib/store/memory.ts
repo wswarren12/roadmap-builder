@@ -91,6 +91,7 @@ export class MemoryStore implements Store {
       description: input.description ?? '',
       startMonth: input.startMonth,
       endMonth: input.endMonth,
+      palette: input.palette ?? 'pl',
       createdAt: now(),
       updatedAt: now(),
     };
@@ -244,6 +245,7 @@ export class MemoryStore implements Store {
       responsibleTeam: input.responsibleTeam ?? '',
       status: input.status ?? 'green',
       kpi: input.kpi ?? '',
+      completedAt: input.completedAt ?? null,
       colorIndex,
       createdAt: now(),
       updatedAt: now(),
@@ -260,6 +262,8 @@ export class MemoryStore implements Store {
       ...patch,
       milestoneDate:
         patch.milestoneDate === undefined ? i.milestoneDate : patch.milestoneDate,
+      completedAt:
+        patch.completedAt === undefined ? i.completedAt : patch.completedAt,
       updatedAt: now(),
     };
     this.db.items.set(id, updated);
@@ -316,6 +320,7 @@ export class MemoryStore implements Store {
       milestoneDate: input.milestoneDate ?? null,
       kpi: input.kpi ?? '',
       dri: input.dri ?? '',
+      completedAt: input.completedAt ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -331,6 +336,8 @@ export class MemoryStore implements Store {
       ...patch,
       milestoneDate:
         patch.milestoneDate === undefined ? s.milestoneDate : patch.milestoneDate,
+      completedAt:
+        patch.completedAt === undefined ? s.completedAt : patch.completedAt,
       updatedAt: now(),
     };
     this.db.sprints.set(id, updated);

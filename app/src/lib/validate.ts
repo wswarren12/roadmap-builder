@@ -81,6 +81,15 @@ export function validateMilestoneDate(
   return null;
 }
 
+/** Completion date: optional; when present must be a valid ISO date. */
+export function validateCompletedDate(value: unknown): ValidationError | null {
+  if (value == null || value === '') return null;
+  if (!isValidISODate(value)) {
+    return { field: 'completedAt', message: 'Completion date must be a valid date' };
+  }
+  return null;
+}
+
 export function roadmapSpan(roadmap: { startMonth: string; endMonth: string }) {
   return { start: roadmap.startMonth, end: rangeEndDate(roadmap.endMonth) };
 }

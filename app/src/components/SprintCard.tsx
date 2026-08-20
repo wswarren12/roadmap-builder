@@ -62,6 +62,12 @@ export function SprintCard({
                 <span className="detail-label">DRI</span>
                 <span className="detail-value">{sprint.dri || '—'}</span>
               </div>
+              <div className="detail-field">
+                <span className="detail-label">Completed</span>
+                <span className="detail-value" data-testid="sprint-card-completed">
+                  {sprint.completedAt ? formatDate(sprint.completedAt) : '—'}
+                </span>
+              </div>
             </div>
           </DrawerBody>
           {editable && (

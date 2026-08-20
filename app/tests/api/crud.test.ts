@@ -42,11 +42,27 @@ describe('roadmap lifecycle (F-1)', () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.roadmap.title).toBe('H2 2026');
+    expect(body.roadmap.palette).toBe('pl'); // default palette
     expect(body.initiatives).toHaveLength(1);
 
     // Creation sets last-visited (F-5).
     const me = await (await getMe(reqAs(OWNER))).json();
     expect(me.lastRoadmapId).toBe(body.roadmap.id);
+  });
+
+  it('accepts a chosen color palette and rejects unknown ones', async () => {
+    const base = {
+      title: 'Palette',
+      startMonth: '2026-07-01',
+      endMonth: '2026-12-01',
+    };
+    const bad = await postRoadmap(reqAs(OWNER, 'POST', { ...base, palette: 'neon' }));
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).field).toBe('palette');
+
+    const res = await postRoadmap(reqAs(OWNER, 'POST', { ...base, palette: 'sunset' }));
+    expect(res.status).toBe(201);
+    expect((await res.json()).roadmap.palette).toBe('sunset');
   });
 
   it('enforces max 8 initiatives server-side (AC-1.2)', async () => {
@@ -199,6 +215,59 @@ describe('items (F-2)', () => {
     expect(good.status).toBe(200);
   });
 
+  it('honors a user-chosen bar color on create and edit, rejecting out-of-range picks', async () => {
+    const { roadmap, initiative, item } = await seedRoadmap(store);
+    const created = await postItem(
+      reqAs(OWNER, 'POST', {
+        initiativeId: initiative.id,
+        title: 'Picked color',
+        startDate: '2026-08-01',
+        endDate: '2026-09-01',
+        colorIndex: 4,
+      }),
+      { params: { id: roadmap.id } },
+    );
+    expect(created.status).toBe(201);
+    expect((await created.json()).item.colorIndex).toBe(4);
+
+    const changed = await patchItem(
+      reqAs(OWNER, 'PATCH', { colorIndex: 2 }),
+      { params: { id: item.id } },
+    );
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).item.colorIndex).toBe(2);
+
+    const bad = await patchItem(
+      reqAs(OWNER, 'PATCH', { colorIndex: ITEM_PALETTE.length }),
+      { params: { id: item.id } },
+    );
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).field).toBe('colorIndex');
+  });
+
+  it('marks an item complete with a completion date, and clears it (completion feature)', async () => {
+    const { item } = await seedRoadmap(store);
+    const bad = await patchItem(
+      reqAs(OWNER, 'PATCH', { completedAt: 'not-a-date' }),
+      { params: { id: item.id } },
+    );
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).field).toBe('completedAt');
+
+    const done = await patchItem(
+      reqAs(OWNER, 'PATCH', { completedAt: '2026-09-01' }),
+      { params: { id: item.id } },
+    );
+    expect(done.status).toBe(200);
+    expect((await done.json()).item.completedAt).toBe('2026-09-01');
+
+    const undone = await patchItem(
+      reqAs(OWNER, 'PATCH', { completedAt: null }),
+      { params: { id: item.id } },
+    );
+    expect((await undone.json()).item.completedAt).toBeNull();
+  });
+
   it('deleting an item cascades its sprints (AC-2.5)', async () => {
     const { item, sprint } = await seedRoadmap(store);
     await deleteItem(reqAs(OWNER, 'DELETE'), { params: { id: item.id } });
@@ -230,6 +299,22 @@ describe('sprints (F-4)', () => {
       { params: { id: sprint.id } },
     );
     expect(res.status).toBe(400);
+  });
+
+  it('marks a sprint complete with a completion date (completion feature)', async () => {
+    const { sprint } = await seedRoadmap(store);
+    const bad = await patchSprint(
+      reqAs(OWNER, 'PATCH', { completedAt: '2026-13-99' }),
+      { params: { id: sprint.id } },
+    );
+    expect(bad.status).toBe(400);
+
+    const done = await patchSprint(
+      reqAs(OWNER, 'PATCH', { completedAt: '2026-08-20' }),
+      { params: { id: sprint.id } },
+    );
+    expect(done.status).toBe(200);
+    expect((await done.json()).sprint.completedAt).toBe('2026-08-20');
   });
 
   it('GET item returns sprints for the subcalendar (F-3)', async () => {

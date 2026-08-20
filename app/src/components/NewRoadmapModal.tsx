@@ -6,6 +6,7 @@ import { Button } from '@pl/components/Button';
 import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
 import { ApiError, api } from '@/lib/client/api';
+import { DEFAULT_PALETTE_ID, PALETTES } from '@/lib/colors';
 import { monthsInclusive } from '@/lib/dates';
 import { Modal } from './Modal';
 import { useToast } from './Toasts';
@@ -33,6 +34,7 @@ export function NewRoadmapModal({
   const [description, setDescription] = useState('');
   const [startMonth, setStartMonth] = useState(defaults.start);
   const [endMonth, setEndMonth] = useState(defaults.end);
+  const [palette, setPalette] = useState(DEFAULT_PALETTE_ID);
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,6 +52,7 @@ export function NewRoadmapModal({
           description,
           startMonth: `${startMonth}-01`,
           endMonth: `${endMonth}-01`,
+          palette,
         },
       });
       onOpenChange(false);
@@ -127,6 +130,31 @@ export function NewRoadmapModal({
             data-testid="end-month"
           />
         </div>
+      </div>
+      <div>
+        <span className="form-label">Color palette</span>
+        <div className="palette-options" role="radiogroup" aria-label="Color palette">
+          {PALETTES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`palette-option${palette === p.id ? ' palette-option--selected' : ''}`}
+              role="radio"
+              aria-checked={palette === p.id}
+              onClick={() => setPalette(p.id)}
+              data-testid={`palette-${p.id}`}
+            >
+              <span className="palette-swatches">
+                {p.colors.slice(0, 4).map((c) => (
+                  <span key={c} className="palette-swatch" style={{ background: c }} />
+                ))}
+                <span className="palette-swatch" style={{ background: p.completed }} />
+              </span>
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <span className="max-hint">The green swatch is used for completed items.</span>
       </div>
       {months > 0 && (
         <span className={months < 3 || months > 12 ? 'range-error' : 'max-hint'}>

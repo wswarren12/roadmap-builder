@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { EmptyState } from '@pl/components/EmptyState';
-import { ITEM_PALETTE, STATUS_COLORS, itemColor } from '@/lib/colors';
+import { ITEM_PALETTE, STATUS_COLORS, barColor } from '@/lib/colors';
 import {
   addDays,
   dayOffsetInSpan,
@@ -916,7 +916,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         lane={lanes.get(item.id) ?? 0}
                         laneHeight={LANE_H}
                         laneGap={LANE_GAP}
-                        color={itemColor(item.colorIndex)}
+                        color={barColor(item, roadmap.palette)}
                         editable={editable}
                         clampStart={spanStart}
                         clampEnd={spanEnd}
@@ -931,6 +931,12 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                             {formatRange(item.startDate, item.endDate)}
                             <br />
                             Status: {item.status}
+                            {item.completedAt ? (
+                              <>
+                                <br />
+                                Completed: {item.completedAt}
+                              </>
+                            ) : null}
                             {item.dris ? (
                               <>
                                 <br />
@@ -1008,6 +1014,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
           initiatives={initiatives}
           initial={itemForm.initial}
           editing={itemForm.editing}
+          defaultColorIndex={items.length % ITEM_PALETTE.length}
           driSuggestions={team.map((m) => m.name)}
           onSave={async (values) => {
             await saveItem(values, itemForm.editing);

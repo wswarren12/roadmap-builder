@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { Badge } from '@pl/components/Badge';
+import { Input } from '@pl/components/Input';
 import { EmptyState } from '@pl/components/EmptyState';
-import { SPRINT_COLOR, itemColor } from '@/lib/colors';
+import { barColor, completedColor, sprintColor } from '@/lib/colors';
 import {
   addDays,
   dayOffsetInSpan,
@@ -24,6 +25,7 @@ import { exportItemPdf } from '@/lib/client/pdf';
 import { Bar } from './Bar';
 import { ConfirmModal } from './ConfirmModal';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
+import { Modal } from './Modal';
 import { SignedOutLanding } from './SignedOutLanding';
 import { SprintCard } from './SprintCard';
 import { SprintFormModal, type SprintFormValues } from './SprintFormModal';
@@ -77,6 +79,8 @@ export function SubcalendarView({
   const [promotingSprint, setPromotingSprint] = useState<SprintItem | null>(null);
   const [editingItem, setEditingItem] = useState(false);
   const [deletingItem, setDeletingItem] = useState(false);
+  const [completingItem, setCompletingItem] = useState(false);
+  const [completeDate, setCompleteDate] = useState(todayISO);
   const [busy, setBusy] = useState(false);
   const laneDown = useRef<{ x: number; y: number } | null>(null);
 
@@ -174,7 +178,7 @@ export function SubcalendarView({
   const { lanes, laneCount } = assignLanes(sprints);
   const lanesHeight = laneCount * (LANE_H + LANE_GAP) + LANE_GAP;
   const todayOff = dayOffsetInSpan(item.startDate, item.endDate, todayISO());
-  const color = itemColor(item.colorIndex);
+  const color = barColor(item, roadmap.palette);
   const openSprint = sprints.find((s) => s.id === openSprintId) ?? null;
 
   async function saveSprint(values: SprintFormValues, editing?: SprintItem) {
@@ -278,6 +282,23 @@ export function SubcalendarView({
     await load();
   }
 
+  async function confirmCompleteItem() {
+    setBusy(true);
+    try {
+      const res = await api<{ item: RoadmapItem }>(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        body: { completedAt: completeDate },
+      });
+      setData((d) => (d ? { ...d, item: { ...d.item, ...res.item } } : d));
+      setCompletingItem(false);
+      toast('success', `Marked "${item.title}" complete`);
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Could not mark complete — please retry');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmDeleteItem() {
     setBusy(true);
     try {
@@ -348,6 +369,19 @@ export function SubcalendarView({
                 >
                   Edit item
                 </Button>
+                {!item.completedAt && (
+                  <Button
+                    variant="secondary"
+                    styleType="border"
+                    onClick={() => {
+                      setCompleteDate(todayISO());
+                      setCompletingItem(true);
+                    }}
+                    data-testid="mark-complete"
+                  >
+                    Mark complete
+                  </Button>
+                )}
               </>
             )}
             <Button
@@ -410,6 +444,14 @@ export function SubcalendarView({
             <div className="detail-field">
               <span className="detail-label">KPI</span>
               <span className="detail-value">{item.kpi}</span>
+            </div>
+          )}
+          {item.completedAt && (
+            <div className="detail-field">
+              <span className="detail-label">Completed</span>
+              <span className="detail-value" data-testid="item-completed-value">
+                {formatDate(item.completedAt)}
+              </span>
             </div>
           )}
         </div>
@@ -479,7 +521,11 @@ export function SubcalendarView({
                     lane={lanes.get(sprint.id) ?? 0}
                     laneHeight={LANE_H}
                     laneGap={LANE_GAP}
-                    color={SPRINT_COLOR}
+                    color={
+                      sprint.completedAt
+                        ? completedColor(roadmap.palette)
+                        : sprintColor(roadmap.palette)
+                    }
                     editable={editable}
                     clampStart={item.startDate}
                     clampEnd={item.endDate}
@@ -491,6 +537,12 @@ export function SubcalendarView({
                         <strong>{sprint.name}</strong>
                         <br />
                         {formatRange(sprint.startDate, sprint.endDate)}
+                        {sprint.completedAt ? (
+                          <>
+                            <br />
+                            Completed: {sprint.completedAt}
+                          </>
+                        ) : null}
                         {sprint.dri ? (
                           <>
                             <br />
@@ -535,6 +587,47 @@ export function SubcalendarView({
             setSprintForm(null);
           }}
         />
+      )}
+
+      {completingItem && (
+        <Modal
+          open
+          onOpenChange={(open) => !open && setCompletingItem(false)}
+          title="Mark item complete"
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                styleType="border"
+                onClick={() => setCompletingItem(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="success"
+                styleType="fill"
+                loading={busy}
+                onClick={confirmCompleteItem}
+                data-testid="confirm-complete"
+              >
+                Confirm completion
+              </Button>
+            </>
+          }
+        >
+          <p className="confirm-message">
+            “{item.title}” will turn the palette’s completed green on the roadmap. You can
+            undo this later from Edit item.
+          </p>
+          <Input
+            label="Completion date"
+            type="date"
+            value={completeDate}
+            onChange={(e) => setCompleteDate(e.target.value || todayISO())}
+            fullWidth
+            data-testid="complete-date"
+          />
+        </Modal>
       )}
 
       {editingItem && (

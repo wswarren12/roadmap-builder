@@ -31,6 +31,7 @@ function mapRoadmap(r: any): Roadmap {
     description: r.description ?? '',
     startMonth: r.start_month,
     endMonth: r.end_month,
+    palette: r.palette ?? 'pl',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -63,6 +64,7 @@ function mapItem(r: any): RoadmapItem {
     responsibleTeam: r.responsible_team ?? '',
     status: r.status,
     kpi: r.kpi ?? '',
+    completedAt: r.completed_at ?? null,
     colorIndex: r.color_index,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: r.created_at,
@@ -82,6 +84,7 @@ function mapSprint(r: any): SprintItem {
     milestoneDate: r.milestone_date,
     kpi: r.kpi ?? '',
     dri: r.dri ?? '',
+    completedAt: r.completed_at ?? null,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -171,6 +174,8 @@ function itemPatch(patch: Partial<ItemInput>) {
   if (patch.responsibleTeam !== undefined) row.responsible_team = patch.responsibleTeam;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
+  if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
+  if (patch.colorIndex !== undefined) row.color_index = patch.colorIndex;
   row.updated_at = new Date().toISOString();
   return row;
 }
@@ -185,6 +190,7 @@ function sprintPatch(patch: Partial<SprintInput>) {
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   if (patch.dri !== undefined) row.dri = patch.dri;
+  if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
   row.updated_at = new Date().toISOString();
   return row;
 }
@@ -239,6 +245,7 @@ export class SupabaseStore implements Store {
         description: input.description ?? '',
         start_month: input.startMonth,
         end_month: input.endMonth,
+        palette: input.palette ?? 'pl',
       })
       .select()
       .single();
@@ -385,6 +392,7 @@ export class SupabaseStore implements Store {
         responsible_team: input.responsibleTeam ?? '',
         status: input.status ?? 'green',
         kpi: input.kpi ?? '',
+        completed_at: input.completedAt ?? null,
         color_index: colorIndex,
       })
       .select()
@@ -468,6 +476,7 @@ export class SupabaseStore implements Store {
         milestone_date: input.milestoneDate ?? null,
         kpi: input.kpi ?? '',
         dri: input.dri ?? '',
+        completed_at: input.completedAt ?? null,
       })
       .select()
       .single();

@@ -53,13 +53,14 @@ export interface Seeded {
 export async function seedRoadmap(
   request: APIRequestContext,
   owner: DevUser,
-  overrides: Partial<{ title: string; startMonth: string; endMonth: string }> = {},
+  overrides: Partial<{ title: string; startMonth: string; endMonth: string; palette: string }> = {},
 ): Promise<Seeded> {
   const res = await apiAs(request, owner, 'post', '/api/roadmaps', {
     title: overrides.title ?? 'H2 2026 Platform Roadmap',
     description: 'E2E seeded roadmap',
     startMonth: overrides.startMonth ?? '2026-07-01',
     endMonth: overrides.endMonth ?? '2026-12-01',
+    palette: overrides.palette ?? 'pl',
   });
   if (res.status() !== 201) throw new Error(`seedRoadmap failed: ${res.status()}`);
   const body = await res.json();

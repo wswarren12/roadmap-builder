@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
-import { formatRange } from '@/lib/dates';
+import { formatRange, todayISO } from '@/lib/dates';
 import type { RoadmapItem, SprintItem } from '@/lib/types';
 import { ApiError } from '@/lib/client/api';
 import { Modal } from './Modal';
@@ -18,6 +18,7 @@ export interface SprintFormValues {
   milestoneDate: string | null;
   kpi: string;
   dri: string;
+  completedAt: string | null;
 }
 
 /** Sprint-item create/edit form (F-4) — dates bounded by the parent item. */
@@ -49,6 +50,7 @@ export function SprintFormModal({
     milestoneDate: source?.milestoneDate ?? null,
     kpi: source?.kpi ?? '',
     dri: source?.dri ?? '',
+    completedAt: source?.completedAt ?? null,
   });
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -172,6 +174,28 @@ export function SprintFormModal({
             <option key={name} value={name} />
           ))}
         </datalist>
+      </div>
+      <div className="completed-row">
+        <label className="completed-toggle">
+          <input
+            type="checkbox"
+            checked={values.completedAt !== null}
+            onChange={(e) => set('completedAt', e.target.checked ? todayISO() : null)}
+            data-testid="sprint-completed"
+          />
+          Mark as complete
+        </label>
+        {values.completedAt !== null && (
+          <Input
+            label="Completion date"
+            type="date"
+            value={values.completedAt}
+            onChange={(e) => set('completedAt', e.target.value || todayISO())}
+            error={error?.field === 'completedAt' ? error.message : undefined}
+            fullWidth
+            data-testid="sprint-completed-date"
+          />
+        )}
       </div>
       {error && !error.field && <span className="range-error">{error.message}</span>}
     </Modal>

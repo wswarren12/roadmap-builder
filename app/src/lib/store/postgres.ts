@@ -49,6 +49,7 @@ function mapRoadmap(r: any): Roadmap {
     description: r.description ?? '',
     startMonth: r.start_month,
     endMonth: r.end_month,
+    palette: r.palette ?? 'pl',
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -81,6 +82,7 @@ function mapItem(r: any): RoadmapItem {
     responsibleTeam: r.responsible_team ?? '',
     status: r.status,
     kpi: r.kpi ?? '',
+    completedAt: r.completed_at ?? null,
     colorIndex: r.color_index,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: iso(r.created_at),
@@ -100,6 +102,7 @@ function mapSprint(r: any): SprintItem {
     milestoneDate: r.milestone_date,
     kpi: r.kpi ?? '',
     dri: r.dri ?? '',
+    completedAt: r.completed_at ?? null,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
@@ -218,6 +221,8 @@ function itemPatchColumns(patch: Partial<ItemInput>): Record<string, unknown> {
   if (patch.responsibleTeam !== undefined) row.responsible_team = patch.responsibleTeam;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
+  if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
+  if (patch.colorIndex !== undefined) row.color_index = patch.colorIndex;
   row.updated_at = new Date().toISOString();
   return row;
 }
@@ -232,6 +237,7 @@ function sprintPatchColumns(patch: Partial<SprintInput>): Record<string, unknown
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   if (patch.dri !== undefined) row.dri = patch.dri;
+  if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
   row.updated_at = new Date().toISOString();
   return row;
 }
@@ -282,8 +288,8 @@ export class PostgresStore implements Store {
 
   async createRoadmap(owner: { uid: string; email: string | null }, input: RoadmapInput) {
     return this.oneOrThrow(
-      `INSERT INTO roadmaps (owner_uid, owner_email, title, description, start_month, end_month)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO roadmaps (owner_uid, owner_email, title, description, start_month, end_month, palette)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         owner.uid,
         (owner.email ?? '').toLowerCase(),
@@ -291,6 +297,7 @@ export class PostgresStore implements Store {
         input.description ?? '',
         input.startMonth,
         input.endMonth,
+        input.palette ?? 'pl',
       ],
       mapRoadmap,
     );
@@ -422,8 +429,8 @@ export class PostgresStore implements Store {
       `INSERT INTO roadmap_items
         (roadmap_id, initiative_id, title, description, start_date, end_date,
          milestone_text, milestone_date, okrs, dris, responsible_team, status,
-         kpi, color_index, sync_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+         kpi, completed_at, color_index, sync_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         roadmapId,
         input.initiativeId,
@@ -438,6 +445,7 @@ export class PostgresStore implements Store {
         input.responsibleTeam ?? '',
         input.status ?? 'green',
         input.kpi ?? '',
+        input.completedAt ?? null,
         colorIndex,
         syncGroupId,
       ],
@@ -503,8 +511,8 @@ export class PostgresStore implements Store {
     return this.oneOrThrow(
       `INSERT INTO sprint_items
         (roadmap_item_id, name, description, start_date, end_date,
-         milestone_text, milestone_date, kpi, dri, sync_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+         milestone_text, milestone_date, kpi, dri, completed_at, sync_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [
         roadmapItemId,
         input.name,
@@ -515,6 +523,7 @@ export class PostgresStore implements Store {
         input.milestoneDate ?? null,
         input.kpi ?? '',
         input.dri ?? '',
+        input.completedAt ?? null,
         syncGroupId,
       ],
       mapSprint,

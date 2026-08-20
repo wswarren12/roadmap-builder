@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
-import { formatRange, rangeEndDate } from '@/lib/dates';
+import { getPalette } from '@/lib/colors';
+import { formatRange, rangeEndDate, todayISO } from '@/lib/dates';
 import type { Initiative, ItemStatus, Roadmap, RoadmapItem } from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
 import { Modal } from './Modal';
@@ -22,6 +23,8 @@ export interface ItemFormValues {
   responsibleTeam: string;
   status: ItemStatus;
   kpi: string;
+  completedAt: string | null;
+  colorIndex: number;
 }
 
 const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
@@ -182,6 +185,7 @@ export function ItemFormModal({
   initial,
   editing,
   driSuggestions = [],
+  defaultColorIndex = 0,
   onSave,
   onImport,
 }: {
@@ -193,6 +197,8 @@ export function ItemFormModal({
   driSuggestions?: string[];
   initial?: Partial<ItemFormValues>;
   editing?: RoadmapItem;
+  /** Preselected palette hue for new items (the cycling default). */
+  defaultColorIndex?: number;
   onSave: (values: ItemFormValues) => Promise<void>;
   /** When set, shows "Import from other roadmap" (F-15b). Receives the source
    *  item id and the initiative currently selected in this form. */
@@ -213,7 +219,10 @@ export function ItemFormModal({
     responsibleTeam: source?.responsibleTeam ?? '',
     status: (source?.status as ItemStatus) ?? 'green',
     kpi: source?.kpi ?? '',
+    completedAt: source?.completedAt ?? null,
+    colorIndex: source?.colorIndex ?? defaultColorIndex,
   });
+  const palette = getPalette(roadmap.palette);
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -402,6 +411,47 @@ export function ItemFormModal({
         fullWidth
         data-testid="item-responsible-team"
       />
+      <div>
+        <span className="form-label">Bar color</span>
+        <div className="color-options" role="radiogroup" aria-label="Bar color">
+          {palette.colors.map((c, i) => (
+            <button
+              key={c}
+              type="button"
+              className={`color-swatch-btn${values.colorIndex === i ? ' color-swatch-btn--selected' : ''}`}
+              style={{ background: c }}
+              role="radio"
+              aria-checked={values.colorIndex === i}
+              aria-label={`Color ${i + 1}`}
+              onClick={() => set('colorIndex', i)}
+              data-testid={`item-color-${i}`}
+            />
+          ))}
+        </div>
+        <span className="max-hint">Completed items always show the palette&apos;s green.</span>
+      </div>
+      <div className="completed-row">
+        <label className="completed-toggle">
+          <input
+            type="checkbox"
+            checked={values.completedAt !== null}
+            onChange={(e) => set('completedAt', e.target.checked ? todayISO() : null)}
+            data-testid="item-completed"
+          />
+          Mark as complete
+        </label>
+        {values.completedAt !== null && (
+          <Input
+            label="Completion date"
+            type="date"
+            value={values.completedAt}
+            onChange={(e) => set('completedAt', e.target.value || todayISO())}
+            error={error?.field === 'completedAt' ? error.message : undefined}
+            fullWidth
+            data-testid="item-completed-date"
+          />
+        )}
+      </div>
       <div>
         <span className="form-label">Status</span>
         <div className="status-group" role="radiogroup" aria-label="Status">

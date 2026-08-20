@@ -20,6 +20,8 @@ export interface Roadmap {
   description: string;
   startMonth: string;
   endMonth: string;
+  /** Color palette id (see lib/colors PALETTES). Chosen at creation. */
+  palette: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +51,9 @@ export interface RoadmapItem {
   responsibleTeam: string;
   status: ItemStatus;
   kpi: string;
+  /** Completion date (YYYY-MM-DD); non-null renders the bar in the
+   *  palette's green "completed" color. */
+  completedAt: string | null;
   colorIndex: number;
   /** Cross-roadmap link (F-15b): rows sharing a group are the same item
    *  imported into several roadmaps; content edits propagate group-wide. */
@@ -68,6 +73,8 @@ export interface SprintItem {
   milestoneDate: string | null;
   kpi: string;
   dri: string;
+  /** Completion date (YYYY-MM-DD); non-null renders the bar green. */
+  completedAt: string | null;
   /** Linked-sprint group across imported item copies (F-15b). */
   syncGroupId: string | null;
   createdAt: string;
@@ -186,6 +193,7 @@ export interface RoadmapInput {
   description?: string;
   startMonth: string;
   endMonth: string;
+  palette?: string;
 }
 
 export interface ItemInput {
@@ -201,6 +209,9 @@ export interface ItemInput {
   responsibleTeam?: string;
   status?: ItemStatus;
   kpi?: string;
+  completedAt?: string | null;
+  /** Palette hue index chosen by the user (0..palette length-1). */
+  colorIndex?: number;
 }
 
 export interface SprintInput {
@@ -212,4 +223,5 @@ export interface SprintInput {
   milestoneDate?: string | null;
   kpi?: string;
   dri?: string;
+  completedAt?: string | null;
 }

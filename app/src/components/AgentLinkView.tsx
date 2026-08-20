@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { EmptyState } from '@pl/components/EmptyState';
-import { itemColor } from '@/lib/colors';
+import { barColor } from '@/lib/colors';
 import {
   dayOffsetInSpan,
   daysBetween,
@@ -146,7 +146,7 @@ export function AgentLinkView({ token }: { token: string }) {
                         left: `${(off / totalDays) * 100}%`,
                         width: `${(len / totalDays) * 100}%`,
                         top: (lanes.get(item.id) ?? 0) * 40 + 4,
-                        background: itemColor(item.colorIndex),
+                        background: barColor(item, roadmap.palette),
                       }}
                     >
                       <span className="agent-bar-title">{item.title}</span>

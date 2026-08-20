@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
+import { ITEM_PALETTE } from '@/lib/colors';
 import { getStore } from '@/lib/store';
 import { updateItemSynced } from '@/lib/sync';
 import type { ItemInput, ItemStatus } from '@/lib/types';
 import {
   requireNonEmpty,
   roadmapSpan,
+  validateCompletedDate,
   validateDatesWithin,
   validateMilestoneDate,
 } from '@/lib/validate';
@@ -74,6 +76,18 @@ export async function PATCH(req: Request, { params }: Params) {
       return jsonError(400, 'Status must be green, yellow, or red', 'status');
     }
     patch.status = body.status as ItemStatus;
+  }
+  if (body.completedAt !== undefined) {
+    const doneErr = validateCompletedDate(body.completedAt);
+    if (doneErr) return jsonError(400, doneErr.message, doneErr.field);
+    patch.completedAt = (body.completedAt as string) || null;
+  }
+  if (body.colorIndex !== undefined) {
+    const idx = Number(body.colorIndex);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= ITEM_PALETTE.length) {
+      return jsonError(400, 'Invalid bar color', 'colorIndex');
+    }
+    patch.colorIndex = idx;
   }
   if (body.initiativeId !== undefined) {
     const initiative = await store.getInitiative(String(body.initiativeId));

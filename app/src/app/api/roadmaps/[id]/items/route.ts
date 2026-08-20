@@ -6,6 +6,7 @@ import type { ItemInput, ItemStatus } from '@/lib/types';
 import {
   requireNonEmpty,
   roadmapSpan,
+  validateCompletedDate,
   validateDatesWithin,
   validateMilestoneDate,
 } from '@/lib/validate';
@@ -57,7 +58,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     ? (body.status as ItemStatus)
     : 'green';
 
-  const colorIndex = (await store.countItems(roadmap.id)) % ITEM_PALETTE.length;
+  const doneErr = validateCompletedDate(body.completedAt ?? null);
+  if (doneErr) return jsonError(400, doneErr.message, doneErr.field);
+
+  // Chosen palette hue, else deterministic cycling assignment.
+  const chosenIdx = body.colorIndex === undefined ? undefined : Number(body.colorIndex);
+  if (
+    chosenIdx !== undefined &&
+    (!Number.isInteger(chosenIdx) || chosenIdx < 0 || chosenIdx >= ITEM_PALETTE.length)
+  ) {
+    return jsonError(400, 'Invalid bar color', 'colorIndex');
+  }
+  const colorIndex =
+    chosenIdx !== undefined ? chosenIdx : (await store.countItems(roadmap.id)) % ITEM_PALETTE.length;
   const input: ItemInput = {
     initiativeId: initiative.id,
     title: String(body.title).trim(),
@@ -71,6 +84,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     responsibleTeam: typeof body.responsibleTeam === 'string' ? body.responsibleTeam : '',
     status,
     kpi: typeof body.kpi === 'string' ? body.kpi : '',
+    completedAt: (body.completedAt as string) || null,
   };
 
   const item = await store.createItem(roadmap.id, input, colorIndex);
