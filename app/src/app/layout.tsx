@@ -3,6 +3,7 @@ import '../../pl-design-system/styles/globals.scss';
 import './app.scss';
 import { ToastProvider } from '@/components/Toasts';
 import { AppNav } from '@/components/AppNav';
+import { Analytics } from '@/components/Analytics';
 
 export const metadata: Metadata = {
   title: 'Roadmapper',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <ToastProvider>
+          <Analytics />
           <AppNav />
           <main className="app-main">{children}</main>
         </ToastProvider>
