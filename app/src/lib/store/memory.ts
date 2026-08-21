@@ -303,6 +303,17 @@ export class MemoryStore implements Store {
     return (await this.listSprints(roadmapItemId)).length;
   }
 
+  async countSprintsForItems(itemIds: string[]): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    for (const id of itemIds) counts[id] = 0;
+    for (const sprint of this.db.sprints.values()) {
+      if (counts[sprint.roadmapItemId] !== undefined) {
+        counts[sprint.roadmapItemId]++;
+      }
+    }
+    return counts;
+  }
+
   async createSprint(
     roadmapItemId: string,
     input: SprintInput,

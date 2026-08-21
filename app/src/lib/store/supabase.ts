@@ -458,6 +458,19 @@ export class SupabaseStore implements Store {
     return count ?? 0;
   }
 
+  async countSprintsForItems(itemIds: string[]): Promise<Record<string, number>> {
+    if (itemIds.length === 0) return {};
+    const { data, error } = await this.sb
+      .from('sprint_items')
+      .select('roadmap_item_id')
+      .in('roadmap_item_id', itemIds);
+    if (error) throw new Error(error.message);
+    const counts: Record<string, number> = {};
+    for (const id of itemIds) counts[id] = 0;
+    for (const r of data ?? []) counts[r.roadmap_item_id]++;
+    return counts;
+  }
+
   async createSprint(
     roadmapItemId: string,
     input: SprintInput,

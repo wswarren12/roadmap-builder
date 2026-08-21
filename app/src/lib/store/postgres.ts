@@ -503,6 +503,21 @@ export class PostgresStore implements Store {
     return rows[0].n;
   }
 
+  async countSprintsForItems(itemIds: string[]): Promise<Record<string, number>> {
+    if (itemIds.length === 0) return {};
+    const { rows } = await this.pool.query(
+      `SELECT roadmap_item_id, count(*)::int AS n
+       FROM sprint_items
+       WHERE roadmap_item_id = ANY($1)
+       GROUP BY roadmap_item_id`,
+      [itemIds],
+    );
+    const counts: Record<string, number> = {};
+    for (const id of itemIds) counts[id] = 0;
+    for (const r of rows) counts[r.roadmap_item_id] = r.n;
+    return counts;
+  }
+
   async createSprint(
     roadmapItemId: string,
     input: SprintInput,

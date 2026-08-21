@@ -26,14 +26,14 @@ export async function GET(req: Request, { params }: Params) {
     store.listInitiatives(roadmap.id),
     store.listItems(roadmap.id),
   ]);
-  const sprintCounts = await Promise.all(items.map((i) => store.countSprints(i.id)));
+  const sprintCounts = await store.countSprintsForItems(items.map((i) => i.id));
 
   await store.setLastRoadmap(identity.uid, roadmap.id);
 
   return NextResponse.json({
     roadmap,
     initiatives,
-    items: items.map((item, idx) => ({ ...item, sprintCount: sprintCounts[idx] })),
+    items: items.map((item) => ({ ...item, sprintCount: sprintCounts[item.id] ?? 0 })),
     role,
   });
 }

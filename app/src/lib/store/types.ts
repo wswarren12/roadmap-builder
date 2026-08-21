@@ -73,6 +73,8 @@ export interface Store {
   listSprints(roadmapItemId: string): Promise<SprintItem[]>;
   getSprint(id: string): Promise<SprintItem | null>;
   countSprints(roadmapItemId: string): Promise<number>;
+  /** Batch count sprints for multiple items in one query. */
+  countSprintsForItems(itemIds: string[]): Promise<Record<string, number>>;
   createSprint(
     roadmapItemId: string,
     input: SprintInput,

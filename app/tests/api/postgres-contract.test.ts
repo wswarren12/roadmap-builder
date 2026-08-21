@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { completedColor, itemColor } from '@/lib/colors';
 import { PostgresStore } from '@/lib/store/postgres';
 
 /**
@@ -97,6 +99,66 @@ describe.skipIf(!url)('PostgresStore contract', () => {
       expect((await s.getUserState('pg-test'))!.lastRoadmapId).toBe(roadmap.id);
     } finally {
       await s.deleteRoadmap(roadmap.id); // cascades everything above
+    }
+  });
+
+  it('migrates legacy roadmaps to PL colors and enables completion', async () => {
+    const { Pool } = await import('pg');
+    const pool = new Pool({ connectionString: url });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const roadmap = await client.query(
+        `INSERT INTO roadmaps
+          (owner_uid, owner_email, title, start_month, end_month, palette)
+         VALUES ('legacy-test', 'legacy@test.local', 'Legacy', '2026-07-01', '2026-12-01', 'sunset')
+         RETURNING id`,
+      );
+      const initiative = await client.query(
+        `INSERT INTO initiatives (roadmap_id, name, position)
+         VALUES ($1, 'Legacy initiative', 1) RETURNING id`,
+        [roadmap.rows[0].id],
+      );
+      await client.query(
+        `INSERT INTO roadmap_items
+          (roadmap_id, initiative_id, title, start_date, end_date, color_index)
+         VALUES ($1, $2, 'Legacy teal', '2026-08-01', '2026-08-31', 1),
+                ($1, $2, 'Legacy olive', '2026-09-01', '2026-09-30', 5)`,
+        [roadmap.rows[0].id, initiative.rows[0].id],
+      );
+
+      const sql = readFileSync(
+        new URL('../../db/migrations/010_legacy_palette_backfill.sql', import.meta.url),
+        'utf8',
+      );
+      await client.query(sql);
+
+      const migrated = await client.query(
+        `SELECT r.palette, i.id, i.color_index, i.completed_at
+         FROM roadmaps r JOIN roadmap_items i ON i.roadmap_id = r.id
+         WHERE r.id = $1 ORDER BY i.start_date`,
+        [roadmap.rows[0].id],
+      );
+      expect(migrated.rows.map((row) => row.palette)).toEqual(['pl', 'pl']);
+      expect(migrated.rows.map((row) => row.color_index)).toEqual([2, 4]);
+      expect(migrated.rows.map((row) => row.completed_at)).toEqual([null, null]);
+      for (const row of migrated.rows) {
+        expect(itemColor(row.color_index, 'pl')).not.toBe(completedColor('pl'));
+      }
+
+      await client.query(
+        `UPDATE roadmap_items SET completed_at = '2026-09-30' WHERE id = $1`,
+        [migrated.rows[0].id],
+      );
+      const completed = await client.query(
+        'SELECT completed_at FROM roadmap_items WHERE id = $1',
+        [migrated.rows[0].id],
+      );
+      expect(completed.rows[0].completed_at).toBe('2026-09-30');
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+      await pool.end();
     }
   });
 

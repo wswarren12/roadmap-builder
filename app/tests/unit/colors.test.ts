@@ -37,6 +37,12 @@ describe('color palettes (AC-2.1, AC-4.1)', () => {
     }
   });
 
+  it('keeps migrated legacy green slots distinct from completion green', () => {
+    expect(itemColor(2, 'pl')).toBe('#1D4ED8'); // legacy teal slot 1
+    expect(itemColor(4, 'pl')).toBe('#1E3A8A'); // legacy olive slot 5
+    expect([itemColor(2, 'pl'), itemColor(4, 'pl')]).not.toContain(completedColor('pl'));
+  });
+
   it('assigns deterministically and cycles past the palette length', () => {
     const n = ITEM_PALETTE.length;
     expect(itemColor(0)).toBe(ITEM_PALETTE[0]);
