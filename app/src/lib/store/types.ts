@@ -2,6 +2,9 @@ import type {
   AgentActivityEntry,
   AgentLink,
   AgentRole,
+  BacklogImportTarget,
+  BacklogItem,
+  BacklogItemInput,
   Initiative,
   InviteTokens,
   ItemInput,
@@ -19,8 +22,8 @@ import type {
 } from '../types';
 
 /**
- * Repository interface. Two implementations: SupabaseStore (production —
- * service-role key, server-side only) and MemoryStore (local dev + tests).
+ * Repository interface. Implemented by Postgres (production), Supabase
+ * (legacy fallback), and memory (local dev + tests).
  * Authorization is NOT enforced here; the API layer owns it (PRD §9).
  */
 export interface Store {
@@ -84,6 +87,25 @@ export interface Store {
   deleteSprint(id: string): Promise<void>;
   setSprintSyncGroup(id: string, syncGroupId: string): Promise<void>;
   listSprintsBySyncGroup(syncGroupId: string): Promise<SprintItem[]>;
+
+  // personal backlog (owner UID is mandatory on every operation)
+  listBacklogItems(ownerUid: string): Promise<BacklogItem[]>;
+  getBacklogItem(id: string, ownerUid: string): Promise<BacklogItem | null>;
+  createBacklogItem(ownerUid: string, input: BacklogItemInput): Promise<BacklogItem>;
+  updateBacklogItem(
+    id: string,
+    ownerUid: string,
+    patch: Partial<BacklogItemInput>,
+  ): Promise<BacklogItem>;
+  deleteBacklogItem(id: string, ownerUid: string): Promise<boolean>;
+  /** Atomic snapshot + source deletion; API layer verifies roadmap ownership. */
+  moveItemToBacklog(itemId: string, ownerUid: string): Promise<BacklogItem>;
+  /** Atomic standalone import + backlog consumption. */
+  importBacklogItem(
+    id: string,
+    ownerUid: string,
+    target: BacklogImportTarget,
+  ): Promise<{ item: RoadmapItem; sprints: SprintItem[] }>;
 
   // shares
   listShares(roadmapId: string): Promise<RoadmapShare[]>;

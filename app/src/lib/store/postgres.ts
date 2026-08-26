@@ -1,7 +1,16 @@
 import { readFileSync, existsSync } from 'fs';
 import { Pool, types as pgTypes } from 'pg';
+import {
+  backlogToRoadmapInputs,
+  directBacklogPayload,
+  itemToBacklogPayload,
+  parseBacklogPayload,
+} from '../backlog';
 import type {
   AgentActivityEntry,
+  BacklogImportTarget,
+  BacklogItem,
+  BacklogItemInput,
   AgentLink,
   AgentRole,
   Initiative,
@@ -85,6 +94,16 @@ function mapItem(r: any): RoadmapItem {
     completedAt: r.completed_at ?? null,
     colorIndex: r.color_index,
     syncGroupId: r.sync_group_id ?? null,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+function mapBacklog(r: any): BacklogItem {
+  return {
+    id: r.id,
+    ownerUid: r.owner_uid,
+    ...parseBacklogPayload(r.payload),
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -571,6 +590,137 @@ export class PostgresStore implements Store {
       [syncGroupId],
       mapSprint,
     );
+  }
+
+  // ── personal backlog ───────────────────────────────────────────────────
+
+  async listBacklogItems(ownerUid: string) {
+    return this.many(
+      'SELECT * FROM backlog_items WHERE owner_uid = $1 ORDER BY updated_at DESC',
+      [ownerUid],
+      mapBacklog,
+    );
+  }
+
+  async getBacklogItem(id: string, ownerUid: string) {
+    return this.one(
+      'SELECT * FROM backlog_items WHERE id = $1 AND owner_uid = $2',
+      [id, ownerUid],
+      mapBacklog,
+    );
+  }
+
+  async createBacklogItem(ownerUid: string, input: BacklogItemInput) {
+    return this.oneOrThrow(
+      'INSERT INTO backlog_items (owner_uid, payload) VALUES ($1, $2::jsonb) RETURNING *',
+      [ownerUid, JSON.stringify(directBacklogPayload(input))],
+      mapBacklog,
+    );
+  }
+
+  async updateBacklogItem(id: string, ownerUid: string, patch: Partial<BacklogItemInput>) {
+    const current = await this.getBacklogItem(id, ownerUid);
+    if (!current) throw new Error('backlog item not found');
+    const { id: _id, ownerUid: _owner, createdAt: _created, updatedAt: _updated, ...payload } = {
+      ...current,
+      ...patch,
+    };
+    return this.oneOrThrow(
+      `UPDATE backlog_items SET payload = $3::jsonb, updated_at = now()
+       WHERE id = $1 AND owner_uid = $2 RETURNING *`,
+      [id, ownerUid, JSON.stringify(payload)],
+      mapBacklog,
+    );
+  }
+
+  async deleteBacklogItem(id: string, ownerUid: string) {
+    const result = await this.pool.query(
+      'DELETE FROM backlog_items WHERE id = $1 AND owner_uid = $2',
+      [id, ownerUid],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async moveItemToBacklog(itemId: string, ownerUid: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const sourceResult = await client.query(
+        'SELECT * FROM roadmap_items WHERE id = $1 FOR UPDATE',
+        [itemId],
+      );
+      if (!sourceResult.rows[0]) throw new Error('item not found');
+      const sprintResult = await client.query(
+        'SELECT * FROM sprint_items WHERE roadmap_item_id = $1 ORDER BY created_at',
+        [itemId],
+      );
+      const payload = itemToBacklogPayload(
+        mapItem(sourceResult.rows[0]),
+        sprintResult.rows.map(mapSprint),
+      );
+      const inserted = await client.query(
+        'INSERT INTO backlog_items (owner_uid, payload) VALUES ($1, $2::jsonb) RETURNING *',
+        [ownerUid, JSON.stringify(payload)],
+      );
+      await client.query('DELETE FROM roadmap_items WHERE id = $1', [itemId]);
+      await client.query('COMMIT');
+      return mapBacklog(inserted.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async importBacklogItem(id: string, ownerUid: string, target: BacklogImportTarget) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const backlogResult = await client.query(
+        'SELECT * FROM backlog_items WHERE id = $1 AND owner_uid = $2 FOR UPDATE',
+        [id, ownerUid],
+      );
+      if (!backlogResult.rows[0]) throw new Error('backlog item not found');
+      const backlog = mapBacklog(backlogResult.rows[0]);
+      const inputs = backlogToRoadmapInputs(backlog, target);
+      const i = inputs.item;
+      const itemResult = await client.query(
+        `INSERT INTO roadmap_items
+          (roadmap_id, initiative_id, title, description, start_date, end_date,
+           milestone_text, milestone_date, okrs, dris, responsible_team, status,
+           kpi, completed_at, color_index, sync_group_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULL,$14,NULL) RETURNING *`,
+        [
+          target.roadmapId, i.initiativeId, i.title, i.description ?? '', i.startDate, i.endDate,
+          i.milestoneText ?? '', i.milestoneDate ?? null, i.okrs ?? '', i.dris ?? '',
+          i.responsibleTeam ?? '', i.status ?? 'green', i.kpi ?? '', target.colorIndex,
+        ],
+      );
+      const item = mapItem(itemResult.rows[0]);
+      const sprints: SprintItem[] = [];
+      for (const sprint of inputs.sprints) {
+        const result = await client.query(
+          `INSERT INTO sprint_items
+            (roadmap_item_id, name, description, start_date, end_date, milestone_text,
+             milestone_date, kpi, dri, completed_at, sync_group_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,NULL) RETURNING *`,
+          [
+            item.id, sprint.name, sprint.description ?? '', sprint.startDate, sprint.endDate,
+            sprint.milestoneText ?? '', sprint.milestoneDate ?? null, sprint.kpi ?? '', sprint.dri ?? '',
+          ],
+        );
+        sprints.push(mapSprint(result.rows[0]));
+      }
+      await client.query('DELETE FROM backlog_items WHERE id = $1 AND owner_uid = $2', [id, ownerUid]);
+      await client.query('COMMIT');
+      return { item, sprints };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // ── shares ─────────────────────────────────────────────────────────────

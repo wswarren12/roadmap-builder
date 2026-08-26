@@ -27,6 +27,16 @@ rows over months, drill into any bar for its weekly sprint subcalendar.
 - **Synchronized edits**: Content changes propagate to all linked copies automatically
 - **Requires write access on both roadmaps** (linking creates a permanent edit channel)
 
+### Personal backlog
+A private, per-member store of unscheduled work, keyed by LabOS UID and
+**roadmap-agnostic** — any backlog item can be imported into any roadmap you can edit.
+- **Create directly**: Draft an unscheduled item straight into your backlog (content only — no dates)
+- **Move an existing item in**: Only the roadmap **owner** may move a roadmap item to their backlog. The move is atomic — it removes only that roadmap copy (linked copies in other roadmaps are left untouched) and scrubs all absolute schedule, milestone, and completion dates
+- **Relative timing preserved**: Sprint and milestone positions are stored as normalized offsets, so moving an item with sprints keeps their layout without any calendar attached
+- **Import into a roadmap**: Choose a writable roadmap and initiative and supply new item dates; preserved sprint/milestone offsets **scale proportionally** into the new range as a standalone (unlinked) item. A successful import consumes the backlog entry
+- **Dedicated view** (`/backlog`): List, inspect, edit content, delete (with confirmation), and import
+- **Server-enforced**: Ownership and every CRUD/move/import operation is authorized server-side. Out of scope: sharing, bulk actions, prioritization/scoring, and cross-user transfer
+
 ## Run locally
 
 ```bash
@@ -53,7 +63,9 @@ Apply in order:
 - `db/migrations/` for raw Postgres (`DATABASE_URL`)
 - `supabase/migrations/` for Supabase
 
-Files: `0000_extensions.sql` through `010_legacy_palette_backfill.sql`
+Files: `0000_extensions.sql` through `011_backlog.sql` (personal backlog tables;
+Supabase copy adds RLS + service-role-only RPCs). The `db/` and `supabase/` copies
+of `011_backlog.sql` are byte-identical.
 
 ## Environment variables
 
@@ -103,6 +115,10 @@ npm run test:e2e      # Playwright (run npm run build first)
 - `GET/POST /api/roadmaps/:id/team` — Team roster
 - `GET/POST /api/roadmaps/:id/agent-links` — Manage agent links
 - `GET/POST /api/roadmaps/:id/suggestions` — View/resolve agent suggestions
+- `GET/POST /api/backlog` — List / create personal backlog items (per-UID)
+- `GET/PATCH/DELETE /api/backlog/:id` — Inspect / edit content / delete a backlog item
+- `POST /api/backlog/:id/import` — Import a backlog item into a chosen roadmap + initiative with new dates
+- `POST /api/items/:id/backlog` — Owner-only atomic move of a roadmap item into the backlog
 
 ### Agent endpoints (token auth via `/agent/:token/api/...`)
 - `GET /` — Capability manifest (self-documenting)

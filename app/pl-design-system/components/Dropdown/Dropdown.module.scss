@@ -31,7 +31,8 @@
   padding: var(--spacing-4xs);
   min-width: 180px;
   max-width: 320px;
-  z-index: var(--z-dropdown);
+  // Portal content must stay interactive when its trigger is inside a modal or drawer.
+  z-index: calc(var(--z-modal) + 2);
 
   &[data-state='open'] {
     animation: fadeIn 150ms ease;

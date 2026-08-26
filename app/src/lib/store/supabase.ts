@@ -1,6 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { directBacklogPayload, parseBacklogPayload } from '../backlog';
 import type {
   AgentActivityEntry,
+  BacklogImportTarget,
+  BacklogItem,
+  BacklogItemInput,
   AgentLink,
   AgentRole,
   Initiative,
@@ -67,6 +71,16 @@ function mapItem(r: any): RoadmapItem {
     completedAt: r.completed_at ?? null,
     colorIndex: r.color_index,
     syncGroupId: r.sync_group_id ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function mapBacklog(r: any): BacklogItem {
+  return {
+    id: r.id,
+    ownerUid: r.owner_uid,
+    ...parseBacklogPayload(r.payload),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -527,6 +541,93 @@ export class SupabaseStore implements Store {
       .order('created_at');
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapSprint);
+  }
+
+  async listBacklogItems(ownerUid: string) {
+    const { data, error } = await this.sb
+      .from('backlog_items')
+      .select('*')
+      .eq('owner_uid', ownerUid)
+      .order('updated_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapBacklog);
+  }
+
+  async getBacklogItem(id: string, ownerUid: string) {
+    const { data, error } = await this.sb
+      .from('backlog_items')
+      .select('*')
+      .eq('id', id)
+      .eq('owner_uid', ownerUid)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapBacklog(data) : null;
+  }
+
+  async createBacklogItem(ownerUid: string, input: BacklogItemInput) {
+    const res = await this.sb
+      .from('backlog_items')
+      .insert({ owner_uid: ownerUid, payload: directBacklogPayload(input) })
+      .select()
+      .single();
+    return mapBacklog(unwrap(res));
+  }
+
+  async updateBacklogItem(id: string, ownerUid: string, patch: Partial<BacklogItemInput>) {
+    const current = await this.getBacklogItem(id, ownerUid);
+    if (!current) throw new Error('backlog item not found');
+    const { id: _id, ownerUid: _owner, createdAt: _created, updatedAt: _updated, ...payload } = {
+      ...current,
+      ...patch,
+    };
+    const res = await this.sb
+      .from('backlog_items')
+      .update({ payload, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('owner_uid', ownerUid)
+      .select()
+      .single();
+    return mapBacklog(unwrap(res));
+  }
+
+  async deleteBacklogItem(id: string, ownerUid: string) {
+    const { data, error } = await this.sb
+      .from('backlog_items')
+      .delete()
+      .eq('id', id)
+      .eq('owner_uid', ownerUid)
+      .select('id');
+    if (error) throw new Error(error.message);
+    return (data ?? []).length > 0;
+  }
+
+  async moveItemToBacklog(itemId: string, ownerUid: string) {
+    const { data, error } = await this.sb.rpc('backlog_move_item_atomic', {
+      p_item_id: itemId,
+      p_owner_uid: ownerUid,
+    });
+    if (error) throw new Error(error.message);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('item not found');
+    return mapBacklog(row);
+  }
+
+  async importBacklogItem(id: string, ownerUid: string, target: BacklogImportTarget) {
+    const { data, error } = await this.sb.rpc('backlog_import_item_atomic', {
+      p_id: id,
+      p_owner_uid: ownerUid,
+      p_roadmap_id: target.roadmapId,
+      p_initiative_id: target.initiativeId,
+      p_start_date: target.startDate,
+      p_end_date: target.endDate,
+      p_color_index: target.colorIndex,
+    });
+    if (error) throw new Error(error.message);
+    if (!data?.item) throw new Error('backlog item not found');
+    return {
+      item: mapItem(data.item),
+      sprints: (data.sprints ?? []).map(mapSprint),
+    };
   }
 
   async listShares(roadmapId: string) {

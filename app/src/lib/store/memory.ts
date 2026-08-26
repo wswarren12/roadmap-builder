@@ -1,6 +1,10 @@
 import { randomUUID } from 'crypto';
+import { backlogToRoadmapInputs, directBacklogPayload, itemToBacklogPayload } from '../backlog';
 import type {
   AgentActivityEntry,
+  BacklogImportTarget,
+  BacklogItem,
+  BacklogItemInput,
   AgentLink,
   AgentRole,
   Initiative,
@@ -29,6 +33,7 @@ interface Db {
   initiatives: Map<string, Initiative>;
   items: Map<string, RoadmapItem>;
   sprints: Map<string, SprintItem>;
+  backlogItems: Map<string, BacklogItem>;
   shares: Map<string, RoadmapShare>;
   teamMembers: Map<string, TeamMember>;
   userState: Map<string, UserState>;
@@ -46,6 +51,7 @@ function emptyDb(): Db {
     initiatives: new Map(),
     items: new Map(),
     sprints: new Map(),
+    backlogItems: new Map(),
     shares: new Map(),
     teamMembers: new Map(),
     userState: new Map(),
@@ -58,9 +64,17 @@ function emptyDb(): Db {
 
 export class MemoryStore implements Store {
   private db: Db;
+  // ponytail: one queue is enough for the local in-memory adapter; use per-item queues only if local concurrency becomes throughput-sensitive.
+  private backlogMutation: Promise<void> = Promise.resolve();
 
   constructor(db?: Db) {
     this.db = db ?? emptyDb();
+  }
+
+  private serializeBacklogMutation<T>(mutation: () => Promise<T>): Promise<T> {
+    const result = this.backlogMutation.then(mutation);
+    this.backlogMutation = result.then(() => undefined, () => undefined);
+    return result;
   }
 
   reset() {
@@ -369,6 +383,100 @@ export class MemoryStore implements Store {
     return [...this.db.sprints.values()]
       .filter((s) => s.syncGroupId === syncGroupId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async listBacklogItems(ownerUid: string) {
+    return [...this.db.backlogItems.values()]
+      .filter((item) => item.ownerUid === ownerUid)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getBacklogItem(id: string, ownerUid: string) {
+    const item = this.db.backlogItems.get(id);
+    return item?.ownerUid === ownerUid ? item : null;
+  }
+
+  async createBacklogItem(ownerUid: string, input: BacklogItemInput) {
+    return this.serializeBacklogMutation(async () => {
+      const timestamp = now();
+      const item: BacklogItem = {
+        id: randomUUID(),
+        ownerUid,
+        ...directBacklogPayload(input),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      this.db.backlogItems.set(item.id, item);
+      return item;
+    });
+  }
+
+  async updateBacklogItem(id: string, ownerUid: string, patch: Partial<BacklogItemInput>) {
+    return this.serializeBacklogMutation(async () => {
+      const current = await this.getBacklogItem(id, ownerUid);
+      if (!current) throw new Error('backlog item not found');
+      const updated: BacklogItem = { ...current, ...patch, updatedAt: now() };
+      this.db.backlogItems.set(id, updated);
+      return updated;
+    });
+  }
+
+  async deleteBacklogItem(id: string, ownerUid: string) {
+    return this.serializeBacklogMutation(async () => {
+      if (!(await this.getBacklogItem(id, ownerUid))) return false;
+      return this.db.backlogItems.delete(id);
+    });
+  }
+
+  async moveItemToBacklog(itemId: string, ownerUid: string) {
+    return this.serializeBacklogMutation(async () => {
+      const source = this.db.items.get(itemId);
+      if (!source) throw new Error('item not found');
+      const itemsBefore = new Map(this.db.items);
+      const sprintsBefore = new Map(this.db.sprints);
+      const backlogBefore = new Map(this.db.backlogItems);
+      try {
+        const timestamp = now();
+        const backlog: BacklogItem = {
+          id: randomUUID(),
+          ownerUid,
+          ...itemToBacklogPayload(source, await this.listSprints(itemId)),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        this.db.backlogItems.set(backlog.id, backlog);
+        await this.deleteItem(itemId);
+        return backlog;
+      } catch (error) {
+        this.db.items = itemsBefore;
+        this.db.sprints = sprintsBefore;
+        this.db.backlogItems = backlogBefore;
+        throw error;
+      }
+    });
+  }
+
+  async importBacklogItem(id: string, ownerUid: string, target: BacklogImportTarget) {
+    return this.serializeBacklogMutation(async () => {
+      const backlog = await this.getBacklogItem(id, ownerUid);
+      if (!backlog) throw new Error('backlog item not found');
+      const itemsBefore = new Map(this.db.items);
+      const sprintsBefore = new Map(this.db.sprints);
+      try {
+        const input = backlogToRoadmapInputs(backlog, target);
+        const item = await this.createItem(target.roadmapId, input.item, target.colorIndex, null);
+        const sprints: SprintItem[] = [];
+        for (const sprint of input.sprints) {
+          sprints.push(await this.createSprint(item.id, sprint, null));
+        }
+        this.db.backlogItems.delete(id);
+        return { item, sprints };
+      } catch (error) {
+        this.db.items = itemsBefore;
+        this.db.sprints = sprintsBefore;
+        throw error;
+      }
+    });
   }
 
   async listShares(roadmapId: string) {

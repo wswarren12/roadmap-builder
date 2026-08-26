@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireIdentity } from '@/lib/api-helpers';
+import { requireIdentity, roleForRoadmap } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,10 @@ export async function GET(req: Request) {
     ? await store.listRoadmapsSharedWith(identity.email)
     : [];
   const seen = new Set(sharedByUid.map((r) => r.id));
-  const shared = [...sharedByUid, ...sharedByEmail.filter((r) => !seen.has(r.id))];
+  const sharedRaw = [...sharedByUid, ...sharedByEmail.filter((r) => !seen.has(r.id))];
+  const shared = await Promise.all(
+    sharedRaw.map(async (roadmap) => ({ ...roadmap, role: await roleForRoadmap(identity, roadmap) })),
+  );
 
   // Cascade counts power the delete-confirm copy on Profile (AC-9.3).
   const owned = await Promise.all(
@@ -25,6 +28,7 @@ export async function GET(req: Request) {
       const sprintCounts = await Promise.all(items.map((i) => store.countSprints(i.id)));
       return {
         ...roadmap,
+        role: 'owner' as const,
         itemCount: items.length,
         sprintCount: sprintCounts.reduce((a, b) => a + b, 0),
       };

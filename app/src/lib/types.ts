@@ -81,6 +81,58 @@ export interface SprintItem {
   updatedAt: string;
 }
 
+/** A sprint snapshot with normalized positions and no absolute dates. */
+export interface BacklogSprint {
+  name: string;
+  description: string;
+  startPosition: number;
+  endPosition: number;
+  milestoneText: string;
+  milestonePosition: number | null;
+  kpi: string;
+  dri: string;
+}
+
+/** Private, roadmap-agnostic work owned by one authenticated LabOS UID. */
+export interface BacklogItem {
+  id: string;
+  ownerUid: string;
+  title: string;
+  description: string;
+  milestoneText: string;
+  milestonePosition: number | null;
+  okrs: string;
+  dris: string;
+  responsibleTeam: string;
+  status: ItemStatus;
+  kpi: string;
+  colorIndex: number;
+  sprints: BacklogSprint[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BacklogItemInput = Pick<
+  BacklogItem,
+  | 'title'
+  | 'description'
+  | 'milestoneText'
+  | 'okrs'
+  | 'dris'
+  | 'responsibleTeam'
+  | 'status'
+  | 'kpi'
+  | 'colorIndex'
+>;
+
+export interface BacklogImportTarget {
+  roadmapId: string;
+  initiativeId: string;
+  startDate: string;
+  endDate: string;
+  colorIndex: number;
+}
+
 /** The role an invite link (and the share it creates) grants. */
 export type ShareRole = 'editor' | 'viewer';
 

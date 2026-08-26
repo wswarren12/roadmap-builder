@@ -1347,3 +1347,105 @@
   color: var(--foreground-neutral-secondary);
   cursor: pointer;
 }
+
+// ─── Personal backlog ────────────────────────────────────────────────────────
+.backlog-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.backlog-loading,
+.backlog-note,
+.backlog-description {
+  @include pl.body-sm;
+  color: var(--foreground-neutral-tertiary);
+}
+
+.backlog-description {
+  margin-top: var(--spacing-2xs);
+  max-width: 48ch;
+}
+
+.backlog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.backlog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.backlog-dropdown-field {
+  @include pl.label-sm;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  color: var(--foreground-neutral-secondary);
+}
+
+.backlog-error {
+  @include pl.body-sm;
+  color: var(--foreground-critical-default);
+}
+
+.backlog-sprints {
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-neutral-subtle);
+
+  h3 {
+    @include pl.body-sm-strong;
+    margin: 0 0 var(--spacing-2xs);
+    color: var(--foreground-neutral-primary);
+  }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin: var(--spacing-sm) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    padding-left: var(--spacing-sm);
+    border-left: 2px solid var(--border-neutral-subtle);
+  }
+
+  li > p,
+  dd {
+    @include pl.body-sm;
+    color: var(--foreground-neutral-secondary);
+  }
+
+  li > p {
+    margin: var(--spacing-2xs) 0 0;
+  }
+
+  dl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs) var(--spacing-md);
+    margin: var(--spacing-xs) 0 0;
+  }
+
+  dl div {
+    display: flex;
+    gap: var(--spacing-2xs);
+  }
+
+  dt {
+    @include pl.label-sm;
+    color: var(--foreground-neutral-tertiary);
+  }
+
+  dd {
+    margin: 0;
+  }
+}

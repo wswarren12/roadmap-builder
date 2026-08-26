@@ -65,7 +65,10 @@ export function AppNav() {
           </span>
         }
         logoHref="/"
-        items={[{ label: 'Home', href: '/profile', active: pathname === '/profile' }]}
+        items={[
+          { label: 'Home', href: '/profile', active: pathname === '/profile' },
+          { label: 'Backlog', href: '/backlog', active: pathname === '/backlog' },
+        ]}
         userName={me?.name}
         onAvatarClick={() => setIdentityOpen((open) => !open)}
         actions={

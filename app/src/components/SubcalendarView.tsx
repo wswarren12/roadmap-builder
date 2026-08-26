@@ -79,6 +79,7 @@ export function SubcalendarView({
   const [promotingSprint, setPromotingSprint] = useState<SprintItem | null>(null);
   const [editingItem, setEditingItem] = useState(false);
   const [deletingItem, setDeletingItem] = useState(false);
+  const [movingToBacklog, setMovingToBacklog] = useState(false);
   const [completingItem, setCompletingItem] = useState(false);
   const [completeDate, setCompleteDate] = useState(todayISO);
   const [busy, setBusy] = useState(false);
@@ -311,6 +312,18 @@ export function SubcalendarView({
     }
   }
 
+  async function confirmMoveToBacklog() {
+    setBusy(true);
+    try {
+      await api(`/api/items/${item.id}/backlog`, { method: 'POST' });
+      toast('success', `Moved "${item.title}" to your backlog`);
+      router.push('/backlog');
+    } catch (error) {
+      toast('error', error instanceof ApiError ? error.message : 'Move failed — please retry');
+      setBusy(false);
+    }
+  }
+
   // Single-click on empty lane space creates a sprint at that spot; see the
   // matching guard rationale in RoadmapView.handleLaneClick.
   function handleLanePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -396,6 +409,16 @@ export function SubcalendarView({
             >
               Download PDF
             </Button>
+            {role === 'owner' && (
+              <Button
+                variant="secondary"
+                styleType="border"
+                onClick={() => setMovingToBacklog(true)}
+                data-testid="move-to-backlog"
+              >
+                Move to backlog
+              </Button>
+            )}
             {editable && (
               <Button
                 variant="error"
@@ -673,6 +696,16 @@ export function SubcalendarView({
         message={deletingSprint ? `"${deletingSprint.name}" will be permanently deleted.` : ''}
         busy={busy}
         onConfirm={confirmDeleteSprint}
+      />
+
+      <ConfirmModal
+        open={movingToBacklog}
+        onOpenChange={setMovingToBacklog}
+        title="Move item to your backlog?"
+        message={`“${item.title}” will leave this roadmap. Its dates and completion state will be removed; preserved sprint timing will scale when you add it to another roadmap.`}
+        confirmLabel="Move to backlog"
+        busy={busy}
+        onConfirm={confirmMoveToBacklog}
       />
 
       <ConfirmModal

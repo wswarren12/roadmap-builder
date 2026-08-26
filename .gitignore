@@ -18,6 +18,7 @@ playwright-report/
 # Local agent/kit tooling — stays on disk, not in the public repo
 .agents/
 .claude/
+.pi-glla/
 .mcp.json
 .playwright-mcp/
 .vscode/

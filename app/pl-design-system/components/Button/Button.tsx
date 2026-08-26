@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import clsx from 'clsx';
 import type { ButtonProps } from './Button.types';
 import styles from './Button.module.scss';
@@ -14,7 +15,7 @@ const sizeMap = {
   big: styles['size-big'],
 };
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   variant = 'primary',
   styleType = 'fill',
   size = 'md',
@@ -26,11 +27,12 @@ export function Button({
   className,
   children,
   ...props
-}: ButtonProps) {
+}, ref) {
   const variantStyleKey = `${variant}-${styleType}` as keyof typeof styles;
 
   return (
     <button
+      ref={ref}
       className={clsx(
         styles.button,
         sizeMap[size],
@@ -47,4 +49,4 @@ export function Button({
       {rightIcon && <span className={styles.icon}>{rightIcon}</span>}
     </button>
   );
-}
+});
