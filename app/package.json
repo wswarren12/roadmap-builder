@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "DEV_AUTH=1 SUPABASE_URL= SUPABASE_SERVICE_ROLE_KEY= next dev",
     "build": "next build",
     "start": "next start -p ${PORT:-3000} -H 0.0.0.0",
     "test": "vitest run",
