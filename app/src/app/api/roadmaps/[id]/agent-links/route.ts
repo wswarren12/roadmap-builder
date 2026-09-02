@@ -12,13 +12,13 @@ interface Params {
 
 const AGENT_ROLES: AgentRole[] = ['agent_viewer', 'agent_suggester', 'agent_editor'];
 
-/** Agent-link management (owner only). Unlike invite links, each link is an
- *  independent named row — many can coexist and are revoked individually. */
+/** Agent-link management (owner or editor). Unlike invite links, each link is
+ *  an independent named row — many can coexist and are revoked individually. */
 
 /** Links + a peek of recent activity for the share dialog. The token is
- *  included: the owner needs the full /agent/<token> URL to hand out. */
+ *  included: the sharer needs the full /agent/<token> URL to hand out. */
 export async function GET(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const store = getStore();
@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
 
 /** Create a named link. Role defaults to suggester — the safest useful tier. */
 export async function POST(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const body = await readJson(req);

@@ -9,9 +9,10 @@ interface Params {
   params: { id: string };
 }
 
-/** The share list is owner-only, both listing and mutating (PRD §9 table). */
+/** The share list is visible/mutable to owner and editors — editors can
+ *  further share a roadmap they can edit. */
 export async function GET(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const shares = await getStore().listShares(auth.roadmap.id);
@@ -19,7 +20,7 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
   const { roadmap, identity } = auth;
 

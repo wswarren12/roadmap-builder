@@ -10,7 +10,7 @@ interface Params {
   params: { id: string };
 }
 
-/** Invite-link management (owner only). One active token per roadmap per
+/** Invite-link management (owner or editor). One active token per roadmap per
  *  role: the viewer link grants read-only access, the editor link grants
  *  edit access. The two links are created/rotated/disabled independently. */
 
@@ -22,7 +22,7 @@ function roleFromBody(body: Record<string, unknown> | null): ShareRole | null {
 }
 
 export async function GET(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const tokens = await getStore().getInviteTokens(auth.roadmap.id);
@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: Params) {
 
 /** Generate (or rotate — the old link stops working) one role's token. */
 export async function POST(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const role = roleFromBody(await readJson(req));
@@ -44,7 +44,7 @@ export async function POST(req: Request, { params }: Params) {
 
 /** Disable one role's link. Already-claimed members keep their access. */
 export async function DELETE(req: Request, { params }: Params) {
-  const auth = await authorizeRoadmap(req, params.id, 'owner');
+  const auth = await authorizeRoadmap(req, params.id, 'write');
   if (auth instanceof NextResponse) return auth;
 
   const role = roleFromBody(await readJson(req));

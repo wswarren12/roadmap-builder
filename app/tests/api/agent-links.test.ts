@@ -328,7 +328,7 @@ describe('agent-link management + suggestion review', () => {
     resetRateLimits();
   });
 
-  it('owner creates (suggester default), lists, revokes; non-owner 403', async () => {
+  it('owner creates (suggester default), lists, revokes; editor allowed; viewer 403', async () => {
     const { roadmap } = await seedRoadmap(store);
     const created = await linksRoute.POST(reqAs(OWNER, 'POST', { name: 'Hermes PM bot' }), {
       params: { id: roadmap.id },
@@ -339,7 +339,10 @@ describe('agent-link management + suggestion review', () => {
     expect(link.token).toBeTruthy();
 
     expect(
-      (await linksRoute.POST(reqAs(EDITOR, 'POST', { name: 'X' }), { params: { id: roadmap.id } })).status,
+      (await linksRoute.POST(reqAs(EDITOR, 'POST', { name: 'Editor bot' }), { params: { id: roadmap.id } })).status,
+    ).toBe(201);
+    expect(
+      (await linksRoute.POST(reqAs(VIEWER, 'POST', { name: 'X' }), { params: { id: roadmap.id } })).status,
     ).toBe(403);
     expect(
       (await linksRoute.POST(reqAs(OWNER, 'POST', { name: '' }), { params: { id: roadmap.id } })).status,
@@ -349,7 +352,7 @@ describe('agent-link management + suggestion review', () => {
     ).toBe(400);
 
     const listed = await json(await linksRoute.GET(reqAs(OWNER), { params: { id: roadmap.id } }));
-    expect(listed.links).toHaveLength(1);
+    expect(listed.links).toHaveLength(2); // owner's + editor's
     expect(listed.links[0].activity).toEqual([]);
 
     expect((await linkRoute.DELETE(reqAs(VIEWER, 'DELETE'), { params: { id: link.id } })).status).toBe(403);

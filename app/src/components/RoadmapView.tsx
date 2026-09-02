@@ -653,7 +653,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                 Team
               </Button>
             )}
-            {isOwner && (
+            {editable && (
               <Button
                 variant="secondary"
                 styleType="border"
@@ -1035,7 +1035,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
         />
       )}
 
-      {isOwner && (
+      {editable && (
         <SharePanel open={shareOpen} onOpenChange={setShareOpen} roadmapId={roadmap.id} />
       )}
 

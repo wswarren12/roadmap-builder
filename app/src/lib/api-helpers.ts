@@ -66,7 +66,7 @@ export async function authorizeRoadmap(
     return jsonError(403, 'Read-only access — ask the owner for an editor invite to make changes');
   }
   if (required === 'owner' && role !== 'owner') {
-    return jsonError(403, 'Only the owner can manage sharing or delete this roadmap');
+    return jsonError(403, 'Only the owner can do this');
   }
   return { identity, roadmap, role };
 }

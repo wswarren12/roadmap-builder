@@ -31,15 +31,16 @@ type Caller = {
   identity: typeof OWNER | null;
   read: number;
   write: number;
+  share: number;
   ownerOnly: number;
 };
 
 const CALLERS: Caller[] = [
-  { label: 'owner', identity: OWNER, read: 200, write: 200, ownerOnly: 200 },
-  { label: 'editor', identity: EDITOR, read: 200, write: 200, ownerOnly: 403 },
-  { label: 'viewer', identity: VIEWER, read: 200, write: 403, ownerOnly: 403 },
-  { label: 'stranger', identity: STRANGER, read: 403, write: 403, ownerOnly: 403 },
-  { label: 'anonymous', identity: null, read: 401, write: 401, ownerOnly: 401 },
+  { label: 'owner', identity: OWNER, read: 200, write: 200, share: 200, ownerOnly: 200 },
+  { label: 'editor', identity: EDITOR, read: 200, write: 200, share: 200, ownerOnly: 403 },
+  { label: 'viewer', identity: VIEWER, read: 200, write: 403, share: 403, ownerOnly: 403 },
+  { label: 'stranger', identity: STRANGER, read: 403, write: 403, share: 403, ownerOnly: 403 },
+  { label: 'anonymous', identity: null, read: 401, write: 401, share: 401, ownerOnly: 401 },
 ];
 
 describe('read endpoints', () => {
@@ -148,19 +149,19 @@ describe('write endpoints reject read-only callers (AC-6.3)', () => {
   }
 });
 
-describe('owner-only endpoints reject editors too (sharing & destruction stay with the owner)', () => {
-  const expectOwnerOnly = (caller: Caller, actual: number, okStatus = 200) => {
-    if (caller.ownerOnly === 200) {
+describe('sharing endpoints allow owner and editors (editors can further share)', () => {
+  const expectShare = (caller: Caller, actual: number, okStatus = 200) => {
+    if (caller.share === 200) {
       expect([okStatus, 200, 201]).toContain(actual);
     } else {
-      expect(actual).toBe(caller.ownerOnly);
+      expect(actual).toBe(caller.share);
     }
   };
 
   for (const caller of CALLERS) {
     it(`${caller.label} GET shares`, async () => {
       const res = await getShares(reqAs(caller.identity), { params: { id: seeded.roadmap.id } });
-      expectOwnerOnly(caller, res.status);
+      expectShare(caller, res.status);
     });
 
     it(`${caller.label} POST share`, async () => {
@@ -168,7 +169,7 @@ describe('owner-only endpoints reject editors too (sharing & destruction stay wi
         reqAs(caller.identity, 'POST', { email: 'new@pl.network' }),
         { params: { id: seeded.roadmap.id } },
       );
-      expectOwnerOnly(caller, res.status, 201);
+      expectShare(caller, res.status, 201);
     });
 
     it(`${caller.label} DELETE share`, async () => {
@@ -176,14 +177,22 @@ describe('owner-only endpoints reject editors too (sharing & destruction stay wi
       const res = await deleteShare(reqAs(caller.identity, 'DELETE'), {
         params: { id: shares[0].id },
       });
-      expectOwnerOnly(caller, res.status);
+      expectShare(caller, res.status);
     });
+  }
+});
 
+describe('owner-only endpoints reject editors too (destruction stays with the owner)', () => {
+  for (const caller of CALLERS) {
     it(`${caller.label} DELETE roadmap`, async () => {
       const res = await deleteRoadmap(reqAs(caller.identity, 'DELETE'), {
         params: { id: seeded.roadmap.id },
       });
-      expectOwnerOnly(caller, res.status);
+      if (caller.ownerOnly === 200) {
+        expect([200, 201]).toContain(res.status);
+      } else {
+        expect(res.status).toBe(caller.ownerOnly);
+      }
     });
   }
 });

@@ -21,7 +21,8 @@ import { useToast } from './Toasts';
  * inviting: the editor link grants full content editing, the viewer link is
  * read-only. Each role has its own independent /join/<token> URL; opening one
  * while signed in to LabOS binds the visitor's verified member uid with that
- * link's role. Editors still can't share or delete — that stays owner-only.
+ * link's role. Editors can share too (people, invite links, agent links) —
+ * only deleting the roadmap stays owner-only.
  * (Email whitelist is dormant: the v1.4 member context exposes no email.)
  */
 

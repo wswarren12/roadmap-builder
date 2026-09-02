@@ -68,9 +68,18 @@ describe('invite token management (owner only, one token per role)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects non-owners — including editors — on all three invite verbs', async () => {
+  it('editors can use all three invite verbs', async () => {
+    expect((await getInvite(reqAs(EDITOR), rid())).status).toBe(200);
+    expect(
+      (await postInvite(reqAs(EDITOR, 'POST', { role: 'viewer' }), rid())).status,
+    ).toBe(201);
+    expect(
+      (await deleteInvite(reqAs(EDITOR, 'DELETE', { role: 'viewer' }), rid())).status,
+    ).toBe(200);
+  });
+
+  it('rejects viewers, strangers, and anonymous on all three invite verbs', async () => {
     for (const caller of [
-      { identity: EDITOR, status: 403 },
       { identity: VIEWER, status: 403 },
       { identity: STRANGER, status: 403 },
       { identity: null, status: 401 },
@@ -208,8 +217,8 @@ describe('claiming an editor invite (POST /api/join/:token)', () => {
       (await postInitiative(reqAs(STRANGER, 'POST', { name: 'Editor row' }), rid())).status,
     ).toBe(201);
 
-    // …but stay locked out of owner-only surface
-    expect((await postInvite(reqAs(STRANGER, 'POST', { role: 'viewer' }), rid())).status).toBe(403);
+    // …and can share further, but stay locked out of owner-only surface
+    expect((await postInvite(reqAs(STRANGER, 'POST', { role: 'viewer' }), rid())).status).toBe(201);
     expect((await deleteRoadmap(reqAs(STRANGER, 'DELETE'), rid())).status).toBe(403);
 
     const share = (await store.listShares(seeded.roadmap.id)).find(
