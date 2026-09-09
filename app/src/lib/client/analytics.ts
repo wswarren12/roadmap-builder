@@ -1,10 +1,10 @@
 /**
- * Baseline usage analytics (kit v1.9 app-analytics skill). Events go to the
+ * Baseline usage analytics (kit v1.11 app-analytics skill). Events go to the
  * PLN backend which resolves app + member attribution server-side; no SDK,
  * no key. Fire-and-forget: a failure here must never affect the app.
  * Endpoint is inlined per the skill — pln-app.config.json isn't shipped in app/.
  */
-const ANALYTICS_URL = 'https://api-directory.plnetwork.io/v1/ai-apps/track';
+const ANALYTICS_URL = 'https://api-directory.os.pl.xyz/v1/ai-apps/track';
 
 function readAuthToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)authToken=([^;]*)/);
@@ -41,15 +41,47 @@ export function trackEvent(name: string, properties: Record<string, unknown> = {
   }
 }
 
+/**
+ * Route sync — the AI Apps dashboard mirrors the open page in its URL and tab
+ * title (shareable deep links). Mandatory per kit v1.11.
+ */
+export function initRouteSync() {
+  if (window.parent === window) return;
+  let lastSent = '';
+  const send = () => {
+    const path = location.pathname + location.search + location.hash;
+    const title = document.title;
+    if (path + '\n' + title === lastSent) return;
+    lastSent = path + '\n' + title;
+    window.parent.postMessage({ type: 'pln-ai-app:route', path, title }, '*');
+  };
+  (['pushState', 'replaceState'] as const).forEach((method) => {
+    const original = history[method].bind(history);
+    history[method] = (...args: Parameters<History['pushState']>) => {
+      original(...args);
+      send();
+    };
+  });
+  window.addEventListener('popstate', send); // also fires for hash changes
+  // Frameworks set the title after navigation, so watch <head> for title changes too.
+  new MutationObserver(send).observe(document.head, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
+  send();
+}
+
 let initialized = false;
 
-/** Baseline events (opened/error/closed). Call once at startup, every app. */
+/** Baseline events (opened/error/closed) + route sync. Call once at startup, every app. */
 export function initAppAnalytics() {
   if (initialized) return; // React strict-mode / re-render guard
   initialized = true;
 
   const openedAt = Date.now();
   trackEvent('opened');
+  initRouteSync();
 
   // Cap error events so a crash-looping bug can't spam the shared project.
   let errorCount = 0;

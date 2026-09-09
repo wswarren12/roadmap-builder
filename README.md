@@ -1,4 +1,4 @@
-# PL AI Apps — Starter Kit v1.9
+# PL AI Apps — Starter Kit v1.11
 
 Welcome! This kit lets you vibe-code an app with your AI assistant and deploy it
 to the Protocol Labs Network sandbox with a single instruction.

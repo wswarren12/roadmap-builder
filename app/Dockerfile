@@ -1,5 +1,5 @@
 # Multi-stage build: Next.js 14 app. Contract: listen on $PORT, bind 0.0.0.0,
-# answer GET /health, stay iframe-embeddable from *.plnetwork.io.
+# answer GET /health, stay iframe-embeddable from https://os.pl.xyz.
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app

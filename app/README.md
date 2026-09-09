@@ -91,7 +91,7 @@ npm run test:e2e      # Playwright (run npm run build first)
 
 - `npm start` → `next start -p ${PORT:-3000} -H 0.0.0.0`
 - `GET /health` → 200 (503 if no database configured outside dev)
-- CSP: `frame-ancestors 'self' https://plnetwork.io https://*.plnetwork.io`
+- CSP: `frame-ancestors 'self' https://os.pl.xyz`
 - No `X-Frame-Options` (allows LabOS iframe embedding)
 - Docker: multi-stage `Dockerfile` at repo root
 

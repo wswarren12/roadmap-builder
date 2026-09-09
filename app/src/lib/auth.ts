@@ -20,7 +20,7 @@ import type { Identity } from './types';
  * access — the UI explains this in the share panel.
  */
 
-const MEMBER_CONTEXT_URL = 'https://api-directory.plnetwork.io/v1/ai-apps/me';
+const MEMBER_CONTEXT_URL = 'https://api-directory.os.pl.xyz/v1/ai-apps/me';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // No cookie set → the first roster entry (Dev One). Keeps `dev-owner` as the

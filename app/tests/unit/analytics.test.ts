@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initAppAnalytics, trackEvent } from '@/lib/client/analytics';
+import { initAppAnalytics, initRouteSync, trackEvent } from '@/lib/client/analytics';
 
-const ENDPOINT = 'https://api-directory.plnetwork.io/v1/ai-apps/track';
+const ENDPOINT = 'https://api-directory.os.pl.xyz/v1/ai-apps/track';
 
 function sentBodies(fetchMock: ReturnType<typeof vi.fn>) {
   return fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string));
 }
 
-describe('baseline analytics (kit v1.9 app-analytics)', () => {
+describe('baseline analytics (kit v1.11 app-analytics)', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -70,6 +70,24 @@ describe('baseline analytics (kit v1.9 app-analytics)', () => {
       'Bearer tok-123',
     );
     expect(sentBodies(fetchMock)[0].anonId).toBeUndefined();
+  });
+
+  it('route sync posts path + title to the parent frame on navigation (kit v1.11)', () => {
+    const post = vi.fn();
+    vi.stubGlobal('parent', { postMessage: post }); // simulate being iframed
+    document.title = 'Home';
+    initRouteSync();
+    expect(post).toHaveBeenLastCalledWith(
+      { type: 'pln-ai-app:route', path: '/', title: 'Home' },
+      '*',
+    );
+    history.pushState({}, '', '/r/abc?x=1');
+    expect(post).toHaveBeenLastCalledWith(
+      { type: 'pln-ai-app:route', path: '/r/abc?x=1', title: 'Home' },
+      '*',
+    );
+    history.pushState({}, '', '/r/abc?x=1'); // no duplicate for identical state
+    expect(post).toHaveBeenCalledTimes(2);
   });
 
   it('never throws when fetch is unavailable', () => {

@@ -6,8 +6,8 @@ const nextConfig = {
     config.module.rules.push({ test: /\.md$/, type: 'asset/source' });
     return config;
   },
-  // Iframe-embedded from *.plnetwork.io — never send X-Frame-Options; allow
-  // sibling-subdomain framing via frame-ancestors.
+  // Iframe-embedded from the LabOS portal (https://os.pl.xyz) — never send
+  // X-Frame-Options; allow that origin via frame-ancestors (kit v1.11).
   async headers() {
     return [
       {
@@ -16,7 +16,7 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "frame-ancestors 'self' https://plnetwork.io https://*.plnetwork.io",
+              "frame-ancestors 'self' https://os.pl.xyz",
           },
         ],
       },
