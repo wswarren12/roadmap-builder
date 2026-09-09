@@ -44,7 +44,14 @@ export function trackEvent(name: string, properties: Record<string, unknown> = {
 /**
  * Route sync — the AI Apps dashboard mirrors the open page in its URL and tab
  * title (shareable deep links). Mandatory per kit v1.11.
+ *
+ * The route/title (which can include sensitive path segments, e.g. the invite
+ * token in /join/[token]) is delivered ONLY to the LabOS portal that frames the
+ * app — scoping the target origin stops any other page that iframes this app
+ * from harvesting it.
  */
+const PORTAL_ORIGIN = 'https://os.pl.xyz';
+
 export function initRouteSync() {
   if (window.parent === window) return;
   let lastSent = '';
@@ -53,7 +60,7 @@ export function initRouteSync() {
     const title = document.title;
     if (path + '\n' + title === lastSent) return;
     lastSent = path + '\n' + title;
-    window.parent.postMessage({ type: 'pln-ai-app:route', path, title }, '*');
+    window.parent.postMessage({ type: 'pln-ai-app:route', path, title }, PORTAL_ORIGIN);
   };
   (['pushState', 'replaceState'] as const).forEach((method) => {
     const original = history[method].bind(history);
