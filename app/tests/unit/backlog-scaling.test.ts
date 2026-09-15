@@ -5,12 +5,12 @@ import type { BacklogItem, RoadmapItem, SprintItem } from '@/lib/types';
 const item: RoadmapItem = {
   id: 'item', roadmapId: 'roadmap', initiativeId: 'initiative', title: 'Launch', description: 'Ship it',
   startDate: '2026-01-01', endDate: '2026-01-11', milestoneText: 'Beta', milestoneDate: '2026-01-06',
-  okrs: 'KR', dris: 'Dana', responsibleTeam: 'Core', status: 'yellow', kpi: 'Users', completedAt: '2026-01-10',
+  okrs: 'KR', dris: 'Dana', driMemberId: null, responsibleTeam: 'Core', responsibleTeamUid: null, status: 'yellow', kpi: 'Users', completedAt: '2026-01-10',
   colorIndex: 2, syncGroupId: 'linked', createdAt: 'x', updatedAt: 'x',
 };
 const sprint: SprintItem = {
   id: 'sprint', roadmapItemId: item.id, name: 'Build', description: 'Build it', startDate: '2026-01-03',
-  endDate: '2026-01-07', milestoneText: 'Review', milestoneDate: '2026-01-05', kpi: 'PRs', dri: 'Dev',
+  endDate: '2026-01-07', milestoneText: 'Review', milestoneDate: '2026-01-05', kpi: 'PRs', dri: 'Dev', driMemberId: null,
   completedAt: '2026-01-07', syncGroupId: 's-linked', createdAt: 'x', updatedAt: 'x',
 };
 

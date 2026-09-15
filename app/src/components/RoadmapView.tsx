@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@pl/components/Button';
 import { EmptyState } from '@pl/components/EmptyState';
-import { ITEM_PALETTE, STATUS_COLORS, barColor } from '@/lib/colors';
+import { ITEM_PALETTE, STATUS_BAR_COLORS, STATUS_COLORS, barColor, statusBarColor } from '@/lib/colors';
 import {
   addDays,
   dayOffsetInSpan,
@@ -17,14 +17,27 @@ import {
   todayISO,
 } from '@/lib/dates';
 import { assignLanes } from '@/lib/stacking';
+import { personMatch, personOptions } from '@/lib/filter';
 import { driAvatars } from '@/lib/team';
-import type { Initiative, ItemStatus, Roadmap, Role, RoadmapItem, TeamMember } from '@/lib/types';
+import {
+  ITEM_STATUSES,
+  STATUS_LABELS,
+  type Initiative,
+  type Roadmap,
+  type RoadmapBacklogItem,
+  type Role,
+  type RoadmapItem,
+  type TeamMember,
+} from '@/lib/types';
 import { MAX_INITIATIVES } from '@/lib/validate';
 import { ApiError, api } from '@/lib/client/api';
 import { exportRoadmapPdf } from '@/lib/client/pdf';
 import { AgentChat } from './AgentChat';
 import { Bar } from './Bar';
+import { BoardView } from './BoardView';
 import { ConfirmModal } from './ConfirmModal';
+import { PersonLink, TeamLink } from './ProfileLink';
+import { useMemberTeams } from './useMemberTeams';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
 import { SharePanel } from './SharePanel';
 import { SignedOutLanding } from './SignedOutLanding';
@@ -58,6 +71,7 @@ interface RoadmapData {
 type LoadState = 'loading' | 'ok' | 'signedout' | 'forbidden' | 'notfound' | 'error';
 
 export function RoadmapView({ roadmapId }: { roadmapId: string }) {
+  const memberTeams = useMemberTeams();
   const router = useRouter();
   const toast = useToast();
   const [data, setData] = useState<RoadmapData | null>(null);
@@ -65,10 +79,33 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(1200);
 
+  // View mode + status-color mode are per-browser preferences (F-board).
+  const [view, setView] = useState<'timeline' | 'board'>('timeline');
+  const [statusColors, setStatusColors] = useState(false);
+  useEffect(() => {
+    setView(localStorage.getItem(`rm-view-${roadmapId}`) === 'board' ? 'board' : 'timeline');
+    setStatusColors(localStorage.getItem(`rm-status-colors-${roadmapId}`) === '1');
+  }, [roadmapId]);
+  function switchView(next: 'timeline' | 'board') {
+    setView(next);
+    localStorage.setItem(`rm-view-${roadmapId}`, next);
+  }
+  function toggleStatusColors(on: boolean) {
+    setStatusColors(on);
+    localStorage.setItem(`rm-status-colors-${roadmapId}`, on ? '1' : '0');
+  }
+
+  // View filters: focus one swimlane and/or one person. Pure view state —
+  // records, counts in confirms and the add-item flow all use the full data.
+  const [focusId, setFocusId] = useState<string>('');
+  const [person, setPerson] = useState<string>('');
+
   // Form / overlay state
   const [itemForm, setItemForm] = useState<{
     initial?: Partial<ItemFormValues>;
     editing?: ItemWithCount;
+    /** Set when scheduling a board-backlog entry: removed once the item saves. */
+    fromBacklogId?: string;
   } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
@@ -134,12 +171,12 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [state]);
+  }, [state, view]);
 
   // Auto-scroll to current month (F-9b) or restore prior position (AC-3.2).
   const scrolledOnce = useRef(false);
   useEffect(() => {
-    if (state !== 'ok' || !data || scrolledOnce.current) return;
+    if (state !== 'ok' || !data || scrolledOnce.current || view !== 'timeline') return;
     const el = scrollRef.current;
     if (!el) return;
     scrolledOnce.current = true;
@@ -159,7 +196,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
       const target = LABEL_W + off * pxPerDay - (gridWidth - LABEL_W) / 3;
       el.scrollLeft = Math.max(0, target - LABEL_W);
     }
-  }, [state, data, gridWidth, roadmapId]);
+  }, [state, data, gridWidth, roadmapId, view]);
 
   if (state === 'loading') {
     return (
@@ -226,6 +263,20 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
   const todayOff = dayOffsetInSpan(spanStart, spanEnd, todayISO());
 
   const totalSprints = items.reduce((sum, i) => sum + i.sprintCount, 0);
+
+  const focus = initiatives.find((i) => i.id === focusId) ?? null;
+  const filtersOn = focus !== null || person !== '';
+  const visibleInitiatives = focus ? [focus] : initiatives;
+  const matchOf = (item: { dris: string; responsibleTeam: string }) =>
+    person ? personMatch(item, person) : null;
+  const visibleItems = items.filter(
+    (i) => (!focus || i.initiativeId === focus.id) && (!person || matchOf(i) !== null),
+  );
+  const people = personOptions(team, items);
+  function clearFilters() {
+    setFocusId('');
+    setPerson('');
+  }
 
   // Pending agent suggestions preview as dotted ghost bars (agent-links
   // design). Item-kind only here — sprint-kind previews belong to the
@@ -384,7 +435,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     }
   }
 
-  async function saveItem(values: ItemFormValues, editing?: ItemWithCount) {
+  async function saveItem(values: ItemFormValues, editing?: ItemWithCount, fromBacklogId?: string) {
     if (editing) {
       const res = await api<{ item: ItemWithCount }>(`/api/items/${editing.id}`, {
         method: 'PATCH',
@@ -398,10 +449,68 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     } else {
       const res = await api<{ item: ItemWithCount }>(`/api/roadmaps/${roadmap.id}/items`, {
         method: 'POST',
-        body: values,
+        body: fromBacklogId ? { ...values, fromBacklogId } : values,
       });
-      setData((d) => (d ? { ...d, items: [...d.items, res.item] } : d));
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              items: [...d.items, res.item],
+              roadmap: fromBacklogId
+                ? { ...d.roadmap, backlog: d.roadmap.backlog.filter((b) => b.id !== fromBacklogId) }
+                : d.roadmap,
+            }
+          : d,
+      );
     }
+  }
+
+  /** Board card move: same PATCH as the item form, optimistic with revert. */
+  async function moveItemStatus(
+    item: RoadmapItem,
+    patch: { status?: RoadmapItem['status']; completedAt?: string | null },
+  ) {
+    const prev = data!.items;
+    setData((d) =>
+      d ? { ...d, items: d.items.map((i) => (i.id === item.id ? { ...i, ...patch } : i)) } : d,
+    );
+    try {
+      const res = await api<{ item: ItemWithCount }>(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        body: patch,
+      });
+      setData((d) =>
+        d ? { ...d, items: d.items.map((i) => (i.id === item.id ? res.item : i)) } : d,
+      );
+    } catch (e) {
+      setData((d) => (d ? { ...d, items: prev } : d));
+      toast('error', e instanceof ApiError ? e.message : "Couldn't move the card");
+    }
+  }
+
+  function setBacklog(backlog: RoadmapBacklogItem[]) {
+    setData((d) => (d ? { ...d, roadmap: { ...d.roadmap, backlog } } : d));
+  }
+
+  /** Board → timeline: prefill the item form from a backlog entry. */
+  function scheduleBacklogEntry(entry: RoadmapBacklogItem) {
+    setItemForm({
+      fromBacklogId: entry.id,
+      initial: {
+        title: entry.title,
+        description: entry.description,
+        status: entry.status,
+        dris: entry.dris,
+        responsibleTeam: entry.responsibleTeam,
+        okrs: entry.okrs,
+        kpi: entry.kpi,
+        milestoneText: entry.milestoneText,
+        colorIndex: entry.colorIndex,
+        initiativeId: initiatives[0]?.id,
+        startDate: spanStart,
+        endDate: addDays(spanStart, 13),
+      },
+    });
   }
 
   /** Topmost element carrying the given data attribute under a point. */
@@ -587,7 +696,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
     }
   }
 
-  function openItem(item: ItemWithCount) {
+  function openItem(item: RoadmapItem) {
     sessionStorage.setItem(`rm-scroll-${roadmap.id}`, String(scrollRef.current?.scrollLeft ?? 0));
     router.push(`/roadmaps/${roadmap.id}/items/${item.id}`);
   }
@@ -730,7 +839,9 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
             <span>{formatRange(spanStart, spanEnd)}</span>
           )}
           <span>
-            {months.length} months · {items.length} items
+            {months.length} months ·{' '}
+            {filtersOn ? `${visibleItems.length} of ${items.length}` : items.length} items
+            {roadmap.backlog.length > 0 && ` · ${roadmap.backlog.length} in backlog`}
           </span>
           {role === 'viewer' && <span data-testid="viewer-badge">View only</span>}
           {role === 'editor' && <span data-testid="editor-badge">Can edit</span>}
@@ -739,9 +850,129 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
               {rangeError}
             </span>
           )}
+          <span className="view-controls">
+            <select
+              className="filter-select"
+              aria-label="Focus swimlane"
+              value={focusId}
+              onChange={(e) => setFocusId(e.target.value)}
+              data-testid="filter-swimlane"
+            >
+              <option value="">All swimlanes</option>
+              {initiatives.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="filter-select"
+              aria-label="Filter by person"
+              value={person}
+              onChange={(e) => setPerson(e.target.value)}
+              data-testid="filter-person"
+            >
+              <option value="">Everyone</option>
+              <optgroup label="People">
+                {people.people.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </optgroup>
+              {people.teams.length > 0 && (
+                <optgroup label="Responsible teams">
+                  {people.teams.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {filtersOn && (
+              <button className="view-toggle-btn view-toggle-btn--on" onClick={clearFilters} data-testid="filter-clear">
+                Clear filters
+              </button>
+            )}
+            <span className="view-toggle" role="tablist" aria-label="View">
+              {(['timeline', 'board'] as const).map((v) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={view === v}
+                  className={`view-toggle-btn${view === v ? ' view-toggle-btn--on' : ''}`}
+                  onClick={() => switchView(v)}
+                  data-testid={`view-${v}`}
+                >
+                  {v === 'timeline' ? 'Timeline' : 'Board'}
+                </button>
+              ))}
+            </span>
+            <label className="completed-toggle">
+              <input
+                type="checkbox"
+                checked={statusColors}
+                onChange={(e) => toggleStatusColors(e.target.checked)}
+                data-testid="status-colors-toggle"
+              />
+              Status colors
+            </label>
+          </span>
         </div>
+        {statusColors && (
+          <div className="status-legend" data-testid="status-legend">
+            {ITEM_STATUSES.map((s) => (
+              <span key={s}>
+                <i style={{ background: STATUS_BAR_COLORS[s] }} />
+                {STATUS_LABELS[s]}
+              </span>
+            ))}
+            <span>
+              <i style={{ background: STATUS_BAR_COLORS.completed }} />
+              Completed
+            </span>
+          </div>
+        )}
       </header>
 
+      {filtersOn && visibleItems.length === 0 && (
+        <div className="filter-empty" data-testid="filter-empty">
+          <EmptyState
+            title="No items match these filters"
+            description={
+              person && focus
+                ? `${person} has nothing in "${focus.name}".`
+                : person
+                  ? `${person} isn't the DRI or responsible team on any item here.`
+                  : `"${focus?.name}" has no items yet.`
+            }
+            primaryAction={
+              <Button variant="secondary" styleType="border" onClick={clearFilters}>
+                Show all swimlanes and people
+              </Button>
+            }
+          />
+        </div>
+      )}
+
+      {view === 'board' && (
+        <BoardView
+          roadmap={roadmap}
+          initiatives={initiatives}
+          items={visibleItems}
+          personFilter={person || null}
+          team={team}
+          editable={editable}
+          statusColors={statusColors}
+          onBacklogChange={setBacklog}
+          onSchedule={scheduleBacklogEntry}
+          onOpenItem={openItem}
+          onMoveItem={moveItemStatus}
+        />
+      )}
+
+      {view === 'timeline' && (
       <div className="timeline-card">
         <div className="timeline-scroll" ref={scrollRef} data-testid="timeline-scroll">
           <div className="timeline-inner" style={{ width: LABEL_W + totalDays * pxPerDay }}>
@@ -754,8 +985,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
               ))}
             </div>
 
-            {initiatives.map((initiative) => {
-              const rowItems = items.filter((i) => i.initiativeId === initiative.id);
+            {visibleInitiatives.map((initiative) => {
+              const rowItems = visibleItems.filter((i) => i.initiativeId === initiative.id);
               const { lanes, laneCount } = assignLanes(rowItems);
               // Ghosts stack in extra lanes below the real bars so a pending
               // proposal never collides with (or reflows) actual items.
@@ -916,11 +1147,13 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         lane={lanes.get(item.id) ?? 0}
                         laneHeight={LANE_H}
                         laneGap={LANE_GAP}
-                        color={barColor(item, roadmap.palette)}
+                        color={
+                          statusColors ? statusBarColor(item) : barColor(item, roadmap.palette)
+                        }
                         editable={editable}
                         clampStart={spanStart}
                         clampEnd={spanEnd}
-                        statusColor={STATUS_COLORS[item.status as ItemStatus]}
+                        statusColor={statusColors ? undefined : STATUS_COLORS[item.status]}
                         milestoneDate={item.milestoneDate}
                         milestoneText={item.milestoneText}
                         enterIndex={idx}
@@ -930,7 +1163,7 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                             <br />
                             {formatRange(item.startDate, item.endDate)}
                             <br />
-                            Status: {item.status}
+                            Status: {STATUS_LABELS[item.status]}
                             {item.completedAt ? (
                               <>
                                 <br />
@@ -940,7 +1173,28 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                             {item.dris ? (
                               <>
                                 <br />
-                                DRIs: {item.dris}
+                                DRI:{' '}
+                                {driAvatars(item.dris, team, item.driMemberId).map((a) => (
+                                  <PersonLink
+                                    key={a.memberId ?? a.name}
+                                    name={a.name}
+                                    image={a.image}
+                                    uid={a.uid}
+                                    showAvatar={false}
+                                    testId="bar-detail-dri"
+                                  />
+                                ))}
+                              </>
+                            ) : null}
+                            {item.responsibleTeam ? (
+                              <>
+                                <br />
+                                Team:{' '}
+                                <TeamLink
+                                  name={item.responsibleTeam}
+                                  uid={item.responsibleTeamUid}
+                                  testId="bar-detail-team"
+                                />
                               </>
                             ) : null}
                           </div>
@@ -949,7 +1203,8 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                         onCommitDates={(s, e, drop) => commitItemDates(item, s, e, drop)}
                         onDragMove={(x, y) => handleItemDragMove(item, x, y)}
                         dropTarget={dragOverBarId === item.id}
-                        avatars={driAvatars(item.dris, team)}
+                        avatars={driAvatars(item.dris, team, item.driMemberId)}
+                        tag={matchOf(item) === 'dri' ? 'DRI' : matchOf(item) === 'team' ? 'Team' : undefined}
                       />
                     ))}
                     {rowGhosts.map((g) => {
@@ -1005,9 +1260,11 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
           </div>
         </div>
       </div>
+      )}
 
       {itemForm && (
         <ItemFormModal
+          memberTeams={memberTeams}
           open
           onOpenChange={(open) => !open && setItemForm(null)}
           roadmap={roadmap}
@@ -1015,9 +1272,9 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
           initial={itemForm.initial}
           editing={itemForm.editing}
           defaultColorIndex={items.length % ITEM_PALETTE.length}
-          driSuggestions={team.map((m) => m.name)}
+          team={team}
           onSave={async (values) => {
-            await saveItem(values, itemForm.editing);
+            await saveItem(values, itemForm.editing, itemForm.fromBacklogId);
             setItemForm(null);
           }}
           onImport={async (sourceItemId, initiativeId) => {

@@ -15,7 +15,7 @@ test.describe('F-5 auth & last-roadmap redirect', () => {
     ).toBeVisible();
   });
 
-  test('login lands on the last visited roadmap; visiting B then landing on B (AC-5.1, AC-5.4)', async ({
+  test('opening the app always lands on the chooser, even after visiting a roadmap; direct links still open (2026-09)', async ({
     page,
     context,
     request,
@@ -28,12 +28,17 @@ test.describe('F-5 auth & last-roadmap redirect', () => {
     await page.goto(`/roadmaps/${a.roadmapId}`);
     await expect(page.getByTestId('roadmap-view')).toBeVisible();
     await page.goto('/');
-    await expect(page).toHaveURL(new RegExp(`/roadmaps/${a.roadmapId}$`));
+    await expect(page).toHaveURL(/\/profile$/);
+    const rows = page.locator('section[aria-label="Roadmaps you own"] [data-testid="roadmap-row"]');
+    await expect(rows).toHaveCount(2);
 
+    // Direct link (LabOS deep link / bookmark) still opens its target.
     await page.goto(`/roadmaps/${b.roadmapId}`);
     await expect(page.getByTestId('roadmap-view')).toBeVisible();
+    await expect(page.getByTestId('roadmap-title')).toHaveValue('Roadmap B');
+    // The nav logo goes back to the chooser, never to a roadmap.
     await page.goto('/');
-    await expect(page).toHaveURL(new RegExp(`/roadmaps/${b.roadmapId}$`));
+    await expect(page).toHaveURL(/\/profile$/);
   });
 
   test('anonymous users see the friendly signed-out state and APIs return 401 (AC-5.2)', async ({

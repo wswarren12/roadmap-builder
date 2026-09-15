@@ -66,3 +66,22 @@ describe('color palettes (AC-2.1, AC-4.1)', () => {
     expect(sprintColor(undefined)).toBe('#1B4CFE');
   });
 });
+
+describe('status-color mode', () => {
+  it('maps R/Y/G, gray for deprioritized and a darker green for completed', async () => {
+    const { STATUS_BAR_COLORS, statusBarColor } = await import('@/lib/colors');
+    expect(statusBarColor({ status: 'red', completedAt: null })).toBe(STATUS_BAR_COLORS.red);
+    expect(statusBarColor({ status: 'yellow', completedAt: null })).toBe(STATUS_BAR_COLORS.yellow);
+    expect(statusBarColor({ status: 'green', completedAt: null })).toBe(STATUS_BAR_COLORS.green);
+    expect(statusBarColor({ status: 'deprioritized', completedAt: null })).toBe(
+      STATUS_BAR_COLORS.deprioritized,
+    );
+    // Completed wins over status and is darker than "on track".
+    const done = statusBarColor({ status: 'red', completedAt: '2026-08-01' });
+    expect(done).toBe(STATUS_BAR_COLORS.completed);
+    const lum = (hex: string) =>
+      [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).reduce((a, b) => a + b, 0);
+    expect(lum(done)).toBeLessThan(lum(STATUS_BAR_COLORS.green));
+    expect(new Set(Object.values(STATUS_BAR_COLORS)).size).toBe(5);
+  });
+});

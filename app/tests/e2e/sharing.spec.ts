@@ -108,8 +108,8 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await expect(ep.getByTestId('roadmap-title')).toBeEnabled();
     await expect(ep.getByTestId('add-item').first()).toBeVisible();
     await expect(ep.getByTestId('add-initiative')).toBeVisible();
-    // owner-only surface stays hidden
-    await expect(ep.getByTestId('share-button')).toHaveCount(0);
+    // editors can manage sharing (d794f47); deletion stays owner-only
+    await expect(ep.getByTestId('share-button')).toBeVisible();
     await expect(ep.getByTestId('delete-roadmap')).toHaveCount(0);
 
     // editor makes a real addition: a new initiative row appears and sticks
@@ -316,8 +316,10 @@ test.describe('F-6 sharing via invite link & the viewer experience', () => {
     await page.getByRole('button', { name: 'Dev Two' }).click();
     await page.getByTestId('switch-dev-owner').click();
     await expect(page.getByRole('button', { name: 'Dev One' })).toBeVisible();
-    await page.goto(joinUrl.replace(/\/join\/.*/, ''));
-    // Land back on the roadmap (last-visited redirect) and reopen sharing.
+    // The landing is the chooser (2026-09); pick the roadmap and reopen sharing.
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/profile$/);
+    await page.locator('[data-testid="roadmap-row"]', { hasText: title }).click();
     await expect(page.getByTestId('roadmap-view')).toBeVisible();
     await page.getByTestId('share-button').click();
     await expect(page.getByTestId('share-row')).toContainText('Dev Two');

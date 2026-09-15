@@ -4,14 +4,19 @@ export interface DevUser {
   uid: string;
   name: string;
   email: string;
+  /** LabOS teams carried by the dev identity (F-13b picker options). */
+  teams?: { uid: string; name: string }[];
 }
 
 let counter = 0;
 
 /** Unique user per test so the shared in-memory store never cross-talks. */
-export function makeUser(prefix: string): DevUser {
+export function makeUser(
+  prefix: string,
+  teams: { uid: string; name: string }[] = [],
+): DevUser {
   const id = `${prefix}-${Date.now().toString(36)}-${counter++}`;
-  return { uid: id, name: `${prefix} ${counter}`, email: `${id}@e2e.test` };
+  return { uid: id, name: `${prefix} ${counter}`, email: `${id}@e2e.test`, teams };
 }
 
 export function devCookie(user: DevUser | 'anonymous') {

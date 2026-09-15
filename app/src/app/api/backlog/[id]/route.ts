@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { jsonError, readJson, requireIdentity } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
-import type { BacklogItemInput } from '@/lib/types';
+import { isItemStatus, type BacklogItemInput } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 interface Params { params: { id: string } }
@@ -30,7 +30,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (typeof body[key] === 'string') patch[key] = body[key] as never;
   }
   if (typeof body.title === 'string') patch.title = body.title.trim();
-  if (body.status === 'green' || body.status === 'yellow' || body.status === 'red') patch.status = body.status;
+  if (isItemStatus(body.status)) patch.status = body.status;
   if (Number.isInteger(body.colorIndex)) patch.colorIndex = Math.max(0, Number(body.colorIndex));
   const item = await store.updateBacklogItem(params.id, identity.uid, patch);
   return NextResponse.json({ item });

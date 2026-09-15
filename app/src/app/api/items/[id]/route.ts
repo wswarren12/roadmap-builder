@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
+import { resolveAssignment } from '@/lib/assignment';
 import { ITEM_PALETTE } from '@/lib/colors';
 import { getStore } from '@/lib/store';
 import { updateItemSynced } from '@/lib/sync';
-import type { ItemInput, ItemStatus } from '@/lib/types';
+import { ITEM_STATUSES, isItemStatus, type ItemInput } from '@/lib/types';
 import {
   requireNonEmpty,
   roadmapSpan,
@@ -17,8 +18,6 @@ export const dynamic = 'force-dynamic';
 interface Params {
   params: { id: string };
 }
-
-const STATUSES: ItemStatus[] = ['green', 'yellow', 'red'];
 
 /** Item + its sprint items — the drill-down payload (F-3). */
 export async function GET(req: Request, { params }: Params) {
@@ -67,15 +66,17 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.title !== undefined) patch.title = String(body.title).trim();
   if (body.description !== undefined) patch.description = String(body.description ?? '');
   if (body.okrs !== undefined) patch.okrs = String(body.okrs ?? '');
-  if (body.dris !== undefined) patch.dris = String(body.dris ?? '');
-  if (body.responsibleTeam !== undefined) patch.responsibleTeam = String(body.responsibleTeam ?? '');
+  // DRI / responsible team resolve to LabOS identities (F-13b).
+  const assigned = await resolveAssignment(getStore(), item.roadmapId, body);
+  if ('error' in assigned) return jsonError(400, assigned.error.message, assigned.error.field);
+  Object.assign(patch, assigned.patch);
   if (body.kpi !== undefined) patch.kpi = String(body.kpi ?? '');
   if (body.milestoneText !== undefined) patch.milestoneText = String(body.milestoneText ?? '');
   if (body.status !== undefined) {
-    if (!STATUSES.includes(body.status as ItemStatus)) {
-      return jsonError(400, 'Status must be green, yellow, or red', 'status');
+    if (!isItemStatus(body.status)) {
+      return jsonError(400, `Status must be one of ${ITEM_STATUSES.join(', ')}`, 'status');
     }
-    patch.status = body.status as ItemStatus;
+    patch.status = body.status;
   }
   if (body.completedAt !== undefined) {
     const doneErr = validateCompletedDate(body.completedAt);

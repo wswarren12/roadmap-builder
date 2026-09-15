@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { directBacklogPayload, parseBacklogPayload } from '../backlog';
+import { directBacklogPayload, parseBacklogPayload, parseRoadmapBacklog } from '../backlog';
 import type {
   AgentActivityEntry,
   BacklogImportTarget,
@@ -36,6 +36,7 @@ function mapRoadmap(r: any): Roadmap {
     startMonth: r.start_month,
     endMonth: r.end_month,
     palette: r.palette ?? 'pl',
+    backlog: parseRoadmapBacklog(r.backlog),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -65,7 +66,9 @@ function mapItem(r: any): RoadmapItem {
     milestoneDate: r.milestone_date,
     okrs: r.okrs ?? '',
     dris: r.dris ?? '',
+    driMemberId: r.dri_member_id ?? null,
     responsibleTeam: r.responsible_team ?? '',
+    responsibleTeamUid: r.responsible_team_uid ?? null,
     status: r.status,
     kpi: r.kpi ?? '',
     completedAt: r.completed_at ?? null,
@@ -98,6 +101,7 @@ function mapSprint(r: any): SprintItem {
     milestoneDate: r.milestone_date,
     kpi: r.kpi ?? '',
     dri: r.dri ?? '',
+    driMemberId: r.dri_member_id ?? null,
     completedAt: r.completed_at ?? null,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: r.created_at,
@@ -185,6 +189,8 @@ function itemPatch(patch: Partial<ItemInput>) {
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.okrs !== undefined) row.okrs = patch.okrs;
   if (patch.dris !== undefined) row.dris = patch.dris;
+  if (patch.driMemberId !== undefined) row.dri_member_id = patch.driMemberId;
+  if (patch.responsibleTeamUid !== undefined) row.responsible_team_uid = patch.responsibleTeamUid;
   if (patch.responsibleTeam !== undefined) row.responsible_team = patch.responsibleTeam;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
@@ -204,6 +210,7 @@ function sprintPatch(patch: Partial<SprintInput>) {
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   if (patch.dri !== undefined) row.dri = patch.dri;
+  if (patch.driMemberId !== undefined) row.dri_member_id = patch.driMemberId;
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
   row.updated_at = new Date().toISOString();
   return row;
@@ -272,12 +279,13 @@ export class SupabaseStore implements Store {
     return data ? mapRoadmap(data) : null;
   }
 
-  async updateRoadmap(id: string, patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth'>>) {
+  async updateRoadmap(id: string, patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth' | 'backlog'>>) {
     const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.title !== undefined) row.title = patch.title;
     if (patch.description !== undefined) row.description = patch.description;
     if (patch.startMonth !== undefined) row.start_month = patch.startMonth;
     if (patch.endMonth !== undefined) row.end_month = patch.endMonth;
+    if (patch.backlog !== undefined) row.backlog = patch.backlog;
     const res = await this.sb.from('roadmaps').update(row).eq('id', id).select().single();
     return mapRoadmap(unwrap(res));
   }
@@ -403,6 +411,8 @@ export class SupabaseStore implements Store {
         milestone_date: input.milestoneDate ?? null,
         okrs: input.okrs ?? '',
         dris: input.dris ?? '',
+        dri_member_id: input.driMemberId ?? null,
+        responsible_team_uid: input.responsibleTeamUid ?? null,
         responsible_team: input.responsibleTeam ?? '',
         status: input.status ?? 'green',
         kpi: input.kpi ?? '',
@@ -503,6 +513,7 @@ export class SupabaseStore implements Store {
         milestone_date: input.milestoneDate ?? null,
         kpi: input.kpi ?? '',
         dri: input.dri ?? '',
+        dri_member_id: input.driMemberId ?? null,
         completed_at: input.completedAt ?? null,
       })
       .select()
@@ -723,10 +734,11 @@ export class SupabaseStore implements Store {
     return mapTeamMember(unwrap(res));
   }
 
-  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image'>>) {
+  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image' | 'memberUid'>>) {
     const row: Record<string, unknown> = {};
     if (patch.name !== undefined) row.name = patch.name;
     if (patch.image !== undefined) row.image = patch.image;
+    if (patch.memberUid !== undefined) row.member_uid = patch.memberUid;
     const res = await this.sb
       .from('roadmap_team_members')
       .update(row)

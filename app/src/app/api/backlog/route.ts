@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { jsonError, readJson, requireIdentity } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
-import type { BacklogItemInput, ItemStatus } from '@/lib/types';
+import { isItemStatus, type BacklogItemInput, type ItemStatus } from '@/lib/types';
 import { requireNonEmpty } from '@/lib/validate';
 
 export const dynamic = 'force-dynamic';
 
 function inputFrom(body: Record<string, unknown>): BacklogItemInput {
-  const status: ItemStatus = body.status === 'yellow' || body.status === 'red' ? body.status : 'green';
+  const status: ItemStatus = isItemStatus(body.status) ? body.status : 'green';
   return {
     title: String(body.title).trim(),
     description: typeof body.description === 'string' ? body.description : '',

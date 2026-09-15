@@ -5,8 +5,9 @@ import { Button } from '@pl/components/Button';
 import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
 import { formatRange, todayISO } from '@/lib/dates';
-import type { RoadmapItem, SprintItem } from '@/lib/types';
+import type { RoadmapItem, SprintItem, TeamMember } from '@/lib/types';
 import { ApiError } from '@/lib/client/api';
+import { DriSelect } from './ItemFormModal';
 import { Modal } from './Modal';
 
 export interface SprintFormValues {
@@ -18,6 +19,8 @@ export interface SprintFormValues {
   milestoneDate: string | null;
   kpi: string;
   dri: string;
+  /** Roster row id backing `dri` (F-13b); null = free text / cleared. */
+  driMemberId: string | null;
   completedAt: string | null;
 }
 
@@ -28,7 +31,7 @@ export function SprintFormModal({
   item,
   initial,
   editing,
-  driSuggestions = [],
+  team = [],
   onSave,
 }: {
   open: boolean;
@@ -36,8 +39,8 @@ export function SprintFormModal({
   item: RoadmapItem;
   initial?: Partial<SprintFormValues>;
   editing?: SprintItem;
-  /** Team roster names offered while typing the DRI (F-13). */
-  driSuggestions?: string[];
+  /** Team roster the DRI is picked from (F-13). */
+  team?: TeamMember[];
   onSave: (values: SprintFormValues) => Promise<void>;
 }) {
   const source = editing ?? initial;
@@ -50,6 +53,7 @@ export function SprintFormModal({
     milestoneDate: source?.milestoneDate ?? null,
     kpi: source?.kpi ?? '',
     dri: source?.dri ?? '',
+    driMemberId: source?.driMemberId ?? null,
     completedAt: source?.completedAt ?? null,
   });
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
@@ -162,18 +166,15 @@ export function SprintFormModal({
           onChange={(e) => set('kpi', e.target.value)}
           fullWidth
         />
-        <Input
-          label="DRI"
+        <DriSelect
+          id="sprint-dri"
           value={values.dri}
-          onChange={(e) => set('dri', e.target.value)}
-          list="sprint-dri-suggestions"
-          fullWidth
+          memberId={values.driMemberId}
+          team={team}
+          onChange={(v, memberId) =>
+            setValues((prev) => ({ ...prev, dri: v, driMemberId: memberId }))
+          }
         />
-        <datalist id="sprint-dri-suggestions">
-          {driSuggestions.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
       </div>
       <div className="completed-row">
         <label className="completed-toggle">

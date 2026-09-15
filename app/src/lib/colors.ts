@@ -5,6 +5,8 @@
  * green-ish color that replaces an item/sprint bar's hue once it is marked
  * complete. All colors keep AA contrast for white bar text.
  */
+import type { ItemStatus } from './types';
+
 export interface Palette {
   id: string;
   name: string;
@@ -71,8 +73,25 @@ export function sprintColor(paletteId?: string | null): string {
   return getPalette(paletteId).colors[0];
 }
 
-export const STATUS_COLORS = {
+/** Light status dot/badge hues (not for white-on-color bar fills). */
+export const STATUS_COLORS: Record<ItemStatus, string> = {
   green: '#12B76A',
   yellow: '#F79009',
   red: '#F04438',
-} as const;
+  deprioritized: '#98A2B3',
+};
+
+/** Bar fills for status-color mode — 700-ish shades so white bar text keeps AA.
+ *  Completed uses a darker green than "on track"; deprioritized is gray. */
+export const STATUS_BAR_COLORS: Record<ItemStatus | 'completed', string> = {
+  green: '#079455',
+  yellow: '#B54708',
+  red: '#B42318',
+  deprioritized: '#667085',
+  completed: '#054F31',
+};
+
+/** Bar color when the roadmap's status-color mode is on. */
+export function statusBarColor(item: { status: ItemStatus; completedAt: string | null }): string {
+  return item.completedAt ? STATUS_BAR_COLORS.completed : STATUS_BAR_COLORS[item.status];
+}

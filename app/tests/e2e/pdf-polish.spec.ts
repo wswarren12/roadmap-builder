@@ -119,10 +119,14 @@ test.describe('F-9 today line & auto-scroll', () => {
   }) => {
     const owner = makeUser('owner');
     await loginAs(context, owner);
-    // 12 months starting well before today (today = 2026-07-22).
+    // A 12-month range centred on the real clock: today sits ~10 months in, so
+    // the view must scroll right to reveal it. (Seeded relative to now so this
+    // never rots the way a hardcoded range does.)
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const now = new Date();
     const seeded = await seedRoadmap(request, owner, {
-      startMonth: '2025-09-01',
-      endMonth: '2026-08-01',
+      startMonth: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 10, 1))),
+      endMonth: iso(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))),
     });
 
     await page.setViewportSize({ width: 900, height: 800 });

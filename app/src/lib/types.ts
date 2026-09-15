@@ -1,6 +1,43 @@
 // All dates are ISO strings: months as 'YYYY-MM-01', days as 'YYYY-MM-DD'.
 
-export type ItemStatus = 'green' | 'yellow' | 'red';
+export type ItemStatus = 'green' | 'yellow' | 'red' | 'deprioritized';
+
+/** Canonical status list — the single source for validation, forms and badges. */
+export const ITEM_STATUSES: readonly ItemStatus[] = ['green', 'yellow', 'red', 'deprioritized'];
+
+export function isItemStatus(value: unknown): value is ItemStatus {
+  return typeof value === 'string' && (ITEM_STATUSES as readonly string[]).includes(value);
+}
+
+/** Human-readable delivery status labels (R/Y/G semantics). */
+export const STATUS_LABELS: Record<ItemStatus, string> = {
+  green: 'On track',
+  yellow: 'At risk',
+  red: 'Off track',
+  deprioritized: 'Deprioritized',
+};
+
+/**
+ * Unscheduled work belonging to ONE roadmap (Backlog view + board column).
+ * Lives as a JSONB array on the roadmap row and carries the same date-free
+ * payload as a personal BacklogItem (sprints keep relative positions), so a
+ * scheduled item can move here and back without losing anything.
+ */
+export interface RoadmapBacklogItem {
+  id: string;
+  title: string;
+  description: string;
+  milestoneText: string;
+  milestonePosition: number | null;
+  okrs: string;
+  dris: string;
+  responsibleTeam: string;
+  status: ItemStatus;
+  kpi: string;
+  colorIndex: number;
+  sprints: BacklogSprint[];
+  createdAt: string;
+}
 
 export interface Identity {
   uid: string;
@@ -10,6 +47,10 @@ export interface Identity {
   email: string | null;
   /** LabOS profile image URL, when the member context provides one (F-13). */
   image?: string | null;
+  /** The member's own LabOS teams (uid + name ONLY — the member-context API
+   *  also returns role/skills, which this app neither needs nor stores).
+   *  Source for the responsible-team picker (F-13b). */
+  teams?: { uid: string; name: string }[];
 }
 
 export interface Roadmap {
@@ -22,6 +63,8 @@ export interface Roadmap {
   endMonth: string;
   /** Color palette id (see lib/colors PALETTES). Chosen at creation. */
   palette: string;
+  /** Roadmap-scoped unscheduled items shown in the board's Backlog column. */
+  backlog: RoadmapBacklogItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -48,7 +91,12 @@ export interface RoadmapItem {
   milestoneDate: string | null;
   okrs: string;
   dris: string;
+  /** Stable DRI assignment: the roadmap_team_members row id whose profile the
+   *  `dris` text names. Null for legacy free-typed values (F-13b). */
+  driMemberId: string | null;
   responsibleTeam: string;
+  /** LabOS team uid backing `responsibleTeam`; null when free text (F-13b). */
+  responsibleTeamUid: string | null;
   status: ItemStatus;
   kpi: string;
   /** Completion date (YYYY-MM-DD); non-null renders the bar in the
@@ -73,6 +121,8 @@ export interface SprintItem {
   milestoneDate: string | null;
   kpi: string;
   dri: string;
+  /** Stable DRI assignment (roster row id); null for legacy text (F-13b). */
+  driMemberId: string | null;
   /** Completion date (YYYY-MM-DD); non-null renders the bar green. */
   completedAt: string | null;
   /** Linked-sprint group across imported item copies (F-15b). */
@@ -258,7 +308,9 @@ export interface ItemInput {
   milestoneDate?: string | null;
   okrs?: string;
   dris?: string;
+  driMemberId?: string | null;
   responsibleTeam?: string;
+  responsibleTeamUid?: string | null;
   status?: ItemStatus;
   kpi?: string;
   completedAt?: string | null;
@@ -275,5 +327,6 @@ export interface SprintInput {
   milestoneDate?: string | null;
   kpi?: string;
   dri?: string;
+  driMemberId?: string | null;
   completedAt?: string | null;
 }

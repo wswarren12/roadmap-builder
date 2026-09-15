@@ -17,6 +17,13 @@ rows over months, drill into any bar for its weekly sprint subcalendar.
 - **Editors**: Can modify items, sprints, initiatives, and roadmap header
 - **Viewers**: Read-only access
 - **Team roster**: Add LabOS members or manual names; appears in DRI dropdowns with autocomplete
+- **Assignments link to LabOS profiles**: the DRI picker stores the roster
+  identity (not a typed name), so two people with the same display name stay
+  distinguishable and renames don't re-point an assignment. The separate
+  responsible-team picker offers the signed-in member's own LabOS teams
+  (the member-context API exposes no directory of arbitrary teams). Assigned
+  avatars/names link to `os.pl.xyz/members/:uid` and teams to
+  `os.pl.xyz/teams/:uid`; people with no linked profile render as plain text.
 
 ### AI assistance
 - **Planning agent (F-14)**: Floating chat bubble for editors. Claude prioritizes with ICE/RICE, sequences dependencies in Now/Next/Later horizons, researches competitor gaps, and applies changes through validated tools (no deletes). System prompt: `src/lib/agent/agent.md`

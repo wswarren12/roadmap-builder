@@ -39,7 +39,7 @@ export interface Store {
   getRoadmap(id: string): Promise<Roadmap | null>;
   updateRoadmap(
     id: string,
-    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth'>>,
+    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth' | 'backlog'>>,
   ): Promise<Roadmap>;
   deleteRoadmap(id: string): Promise<void>;
   listRoadmapsOwned(uid: string): Promise<Roadmap[]>;
@@ -130,7 +130,7 @@ export interface Store {
   ): Promise<TeamMember>;
   updateTeamMember(
     id: string,
-    patch: Partial<Pick<TeamMember, 'name' | 'image'>>,
+    patch: Partial<Pick<TeamMember, 'name' | 'image' | 'memberUid'>>,
   ): Promise<TeamMember>;
   removeTeamMember(id: string): Promise<void>;
 

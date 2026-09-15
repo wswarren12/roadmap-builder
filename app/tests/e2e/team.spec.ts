@@ -49,14 +49,12 @@ test.describe('F-13 team roster & DRI avatars', () => {
     await expect(page.getByTestId('team-error')).toContainText(/already on the team/i);
     await expect(rows).toHaveCount(2);
 
-    // the creator can pick themselves as DRI: the item form's suggestion
-    // list offers their roster entry (2026-08-17)
+    // the creator can pick themselves as DRI: the item form's roster
+    // select offers their (LabOS-linked) entry (2026-08-17)
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('team-panel')).toBeHidden();
     await page.getByTestId('add-item').first().click();
-    await expect(
-      page.locator(`#dri-suggestions option[value="${owner.name}"]`),
-    ).toHaveCount(1);
+    await expect(page.locator('#item-dri option', { hasText: `${owner.name} · LabOS` })).toHaveCount(1);
   });
 
   test('DRI avatars appear on item and sprint bars; free-typed DRIs get initials', async ({

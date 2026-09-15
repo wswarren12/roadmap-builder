@@ -78,6 +78,14 @@ function devIdentity(cookies: Record<string, string>): Identity | null {
           ? parsed.email.toLowerCase()
           : null,
       image: typeof parsed.image === 'string' && parsed.image ? parsed.image : null,
+      teams: Array.isArray(parsed.teams)
+        ? parsed.teams
+            .filter((t: { uid?: unknown }) => typeof t?.uid === 'string' && t.uid)
+            .map((t: { uid: string; name?: unknown }) => ({
+              uid: t.uid,
+              name: typeof t.name === 'string' && t.name ? t.name : t.uid,
+            }))
+        : [],
     };
   } catch {
     return null;
@@ -110,6 +118,19 @@ async function labosIdentity(cookies: Record<string, string>): Promise<Identity 
           ? member.email.toLowerCase()
           : null,
       image: typeof member.image === 'string' && member.image ? member.image : null,
+      // uid + name ONLY. The member-context response also carries role,
+      // mainTeam and skills; the responsible-team picker needs neither, so
+      // they are dropped here rather than stored or forwarded.
+      teams: Array.isArray(member.teams)
+        ? member.teams
+            .filter((t: unknown): t is { uid: string; name?: unknown } =>
+              typeof (t as { uid?: unknown })?.uid === 'string' && !!(t as { uid: string }).uid,
+            )
+            .map((t: { uid: string; name?: unknown }) => ({
+              uid: t.uid,
+              name: typeof t.name === 'string' && t.name ? t.name : t.uid,
+            }))
+        : [],
     };
     authCache().set(token, { identity, expires: Date.now() + CACHE_TTL_MS });
     return identity;

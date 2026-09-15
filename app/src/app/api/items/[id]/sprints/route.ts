@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
 import { getStore } from '@/lib/store';
+import { resolveAssignment } from '@/lib/assignment';
 import { createSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
 import {
@@ -57,6 +58,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     dri: typeof body.dri === 'string' ? body.dri : '',
     completedAt: (body.completedAt as string) || null,
   };
+
+  // DRI resolves to a roster identity (F-13b).
+  const assigned = await resolveAssignment(store, item.roadmapId, body, {
+    dri: 'dri',
+    team: false,
+  });
+  if ('error' in assigned) return jsonError(400, assigned.error.message, assigned.error.field);
+  Object.assign(input, assigned.patch);
 
   const sprint = await createSprintSynced(item, input);
   return NextResponse.json({ sprint }, { status: 201 });

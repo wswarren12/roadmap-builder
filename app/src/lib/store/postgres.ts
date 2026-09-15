@@ -5,6 +5,7 @@ import {
   directBacklogPayload,
   itemToBacklogPayload,
   parseBacklogPayload,
+  parseRoadmapBacklog,
 } from '../backlog';
 import type {
   AgentActivityEntry,
@@ -59,6 +60,7 @@ function mapRoadmap(r: any): Roadmap {
     startMonth: r.start_month,
     endMonth: r.end_month,
     palette: r.palette ?? 'pl',
+    backlog: parseRoadmapBacklog(r.backlog),
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -88,7 +90,9 @@ function mapItem(r: any): RoadmapItem {
     milestoneDate: r.milestone_date,
     okrs: r.okrs ?? '',
     dris: r.dris ?? '',
+    driMemberId: r.dri_member_id ?? null,
     responsibleTeam: r.responsible_team ?? '',
+    responsibleTeamUid: r.responsible_team_uid ?? null,
     status: r.status,
     kpi: r.kpi ?? '',
     completedAt: r.completed_at ?? null,
@@ -121,6 +125,7 @@ function mapSprint(r: any): SprintItem {
     milestoneDate: r.milestone_date,
     kpi: r.kpi ?? '',
     dri: r.dri ?? '',
+    driMemberId: r.dri_member_id ?? null,
     completedAt: r.completed_at ?? null,
     syncGroupId: r.sync_group_id ?? null,
     createdAt: iso(r.created_at),
@@ -237,7 +242,9 @@ function itemPatchColumns(patch: Partial<ItemInput>): Record<string, unknown> {
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.okrs !== undefined) row.okrs = patch.okrs;
   if (patch.dris !== undefined) row.dris = patch.dris;
+  if (patch.driMemberId !== undefined) row.dri_member_id = patch.driMemberId;
   if (patch.responsibleTeam !== undefined) row.responsible_team = patch.responsibleTeam;
+  if (patch.responsibleTeamUid !== undefined) row.responsible_team_uid = patch.responsibleTeamUid;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
@@ -256,6 +263,7 @@ function sprintPatchColumns(patch: Partial<SprintInput>): Record<string, unknown
   if (patch.milestoneDate !== undefined) row.milestone_date = patch.milestoneDate;
   if (patch.kpi !== undefined) row.kpi = patch.kpi;
   if (patch.dri !== undefined) row.dri = patch.dri;
+  if (patch.driMemberId !== undefined) row.dri_member_id = patch.driMemberId;
   if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
   row.updated_at = new Date().toISOString();
   return row;
@@ -328,13 +336,14 @@ export class PostgresStore implements Store {
 
   async updateRoadmap(
     id: string,
-    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth'>>,
+    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth' | 'backlog'>>,
   ) {
     const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.title !== undefined) row.title = patch.title;
     if (patch.description !== undefined) row.description = patch.description;
     if (patch.startMonth !== undefined) row.start_month = patch.startMonth;
     if (patch.endMonth !== undefined) row.end_month = patch.endMonth;
+    if (patch.backlog !== undefined) row.backlog = JSON.stringify(patch.backlog);
     const { clause, params } = buildSet(row);
     return this.oneOrThrow(
       `UPDATE roadmaps SET ${clause} WHERE id = $${params.length + 1} RETURNING *`,
@@ -448,8 +457,9 @@ export class PostgresStore implements Store {
       `INSERT INTO roadmap_items
         (roadmap_id, initiative_id, title, description, start_date, end_date,
          milestone_text, milestone_date, okrs, dris, responsible_team, status,
-         kpi, completed_at, color_index, sync_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+         kpi, completed_at, color_index, sync_group_id, dri_member_id,
+         responsible_team_uid)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [
         roadmapId,
         input.initiativeId,
@@ -467,6 +477,8 @@ export class PostgresStore implements Store {
         input.completedAt ?? null,
         colorIndex,
         syncGroupId,
+        input.driMemberId ?? null,
+        input.responsibleTeamUid ?? null,
       ],
       mapItem,
     );
@@ -545,8 +557,8 @@ export class PostgresStore implements Store {
     return this.oneOrThrow(
       `INSERT INTO sprint_items
         (roadmap_item_id, name, description, start_date, end_date,
-         milestone_text, milestone_date, kpi, dri, completed_at, sync_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+         milestone_text, milestone_date, kpi, dri, completed_at, sync_group_id, dri_member_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         roadmapItemId,
         input.name,
@@ -559,6 +571,7 @@ export class PostgresStore implements Store {
         input.dri ?? '',
         input.completedAt ?? null,
         syncGroupId,
+        input.driMemberId ?? null,
       ],
       mapSprint,
     );
@@ -797,10 +810,11 @@ export class PostgresStore implements Store {
     );
   }
 
-  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image'>>) {
+  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image' | 'memberUid'>>) {
     const row: Record<string, unknown> = {};
     if (patch.name !== undefined) row.name = patch.name;
     if (patch.image !== undefined) row.image = patch.image;
+    if (patch.memberUid !== undefined) row.member_uid = patch.memberUid;
     const { clause, params } = buildSet(row);
     return this.oneOrThrow(
       `UPDATE roadmap_team_members SET ${clause} WHERE id = $${params.length + 1} RETURNING *`,

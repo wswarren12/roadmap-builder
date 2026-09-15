@@ -6,8 +6,17 @@ import { Input } from '@pl/components/Input';
 import { Textarea } from '@pl/components/Textarea';
 import { getPalette } from '@/lib/colors';
 import { formatRange, rangeEndDate, todayISO } from '@/lib/dates';
-import type { Initiative, ItemStatus, Roadmap, RoadmapItem } from '@/lib/types';
+import {
+  ITEM_STATUSES,
+  STATUS_LABELS,
+  type Initiative,
+  type ItemStatus,
+  type Roadmap,
+  type RoadmapItem,
+  type TeamMember,
+} from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
+import { pickerLabel } from '@/lib/team';
 import { Modal } from './Modal';
 
 export interface ItemFormValues {
@@ -20,18 +29,23 @@ export interface ItemFormValues {
   milestoneDate: string | null;
   okrs: string;
   dris: string;
+  /** Roster row id backing `dris` (F-13b); null = free text / cleared. */
+  driMemberId: string | null;
   responsibleTeam: string;
+  /** LabOS team uid backing `responsibleTeam` (F-13b); null = free text. */
+  responsibleTeamUid: string | null;
   status: ItemStatus;
   kpi: string;
   completedAt: string | null;
   colorIndex: number;
 }
 
-const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
-  { value: 'green', label: 'Green' },
-  { value: 'yellow', label: 'Yellow' },
-  { value: 'red', label: 'Red' },
-];
+const STATUS_VARIANT: Record<ItemStatus, 'success' | 'warning' | 'error' | 'secondary'> = {
+  green: 'success',
+  yellow: 'warning',
+  red: 'error',
+  deprioritized: 'secondary',
+};
 
 /**
  * "Import from other roadmap" picker (F-15b): choose one of the member's
@@ -176,6 +190,143 @@ function ImportPicker({
   );
 }
 
+/**
+ * DRI picker (F-13b): exactly one person from the roadmap's team roster,
+ * selected by roster row id so the assignment survives renames and stays
+ * unambiguous when two people share a display name. Legacy free-typed values
+ * remain selected (and preserved) until the editor changes them.
+ */
+export function DriSelect({
+  id,
+  value,
+  memberId,
+  team,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  value: string;
+  /** Currently assigned roster row id, when the value came from the picker. */
+  memberId?: string | null;
+  team: TeamMember[];
+  /** Receives the display name and the roster identity (null = cleared). */
+  onChange: (value: string, memberId: string | null) => void;
+  disabled?: boolean;
+}) {
+  const assigned = memberId ? team.find((m) => m.id === memberId) : undefined;
+  // A saved id whose roster row is gone, or a legacy free-typed name, stays
+  // visible as an option so opening the form never silently drops it.
+  const legacy = !assigned && value.trim() ? value : '';
+  const selected = assigned ? assigned.id : legacy ? `legacy:${legacy}` : '';
+  return (
+    <div>
+      <label className="form-label" htmlFor={id}>
+        DRI
+      </label>
+      <select
+        id={id}
+        className="row-name-input"
+        value={selected}
+        disabled={disabled}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (!next) return onChange('', null);
+          if (next.startsWith('legacy:')) return onChange(next.slice('legacy:'.length), null);
+          const picked = team.find((m) => m.id === next);
+          onChange(picked?.name ?? '', picked?.id ?? null);
+        }}
+        data-testid={id}
+      >
+        <option value="">No DRI</option>
+        {legacy && (
+          <option value={`legacy:${legacy}`}>{legacy} (no linked profile)</option>
+        )}
+        {team.map((m) => (
+          <option key={m.id} value={m.id}>
+            {pickerLabel(m, team)}
+          </option>
+        ))}
+      </select>
+      {assigned && !assigned.memberUid && (
+        <span className="max-hint" data-testid={`${id}-unlinked`}>
+          {assigned.name} has no LabOS profile yet — no profile link will show.
+        </span>
+      )}
+      {team.length === 0 && (
+        <span className="max-hint">Add people in Team to pick a DRI.</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Responsible-team picker (F-13b). Options are the signed-in member's own
+ * LabOS teams — the member-context API is the only supported source and it
+ * exposes no directory of arbitrary teams — plus whatever team is already
+ * saved on this item, so an existing assignment is never dropped just because
+ * the current editor is not on that team.
+ */
+export function TeamSelect({
+  id,
+  value,
+  uid,
+  options,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  value: string;
+  uid?: string | null;
+  /** The signed-in member's LabOS teams (uid + name only). */
+  options: { uid: string; name: string }[];
+  onChange: (value: string, uid: string | null) => void;
+  disabled?: boolean;
+}) {
+  const known = uid ? options.find((t) => t.uid === uid) : undefined;
+  const savedElsewhere = uid && !known ? { uid, name: value || uid } : null;
+  const legacy = !uid && value.trim() ? value : '';
+  const selected = uid ?? (legacy ? `legacy:${legacy}` : '');
+  return (
+    <div>
+      <label className="form-label" htmlFor={id}>
+        Responsible team
+      </label>
+      <select
+        id={id}
+        className="row-name-input"
+        value={selected}
+        disabled={disabled}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (!next) return onChange('', null);
+          if (next.startsWith('legacy:')) return onChange(next.slice('legacy:'.length), null);
+          const picked = [...options, ...(savedElsewhere ? [savedElsewhere] : [])].find(
+            (t) => t.uid === next,
+          );
+          onChange(picked?.name ?? '', picked?.uid ?? null);
+        }}
+        data-testid={id}
+      >
+        <option value="">No responsible team</option>
+        {legacy && <option value={`legacy:${legacy}`}>{legacy} (no linked profile)</option>}
+        {savedElsewhere && (
+          <option value={savedElsewhere.uid}>{savedElsewhere.name} · LabOS</option>
+        )}
+        {options.map((t) => (
+          <option key={t.uid} value={t.uid}>
+            {t.name} · LabOS
+          </option>
+        ))}
+      </select>
+      {options.length === 0 && !legacy && !savedElsewhere && (
+        <span className="max-hint" data-testid={`${id}-none`}>
+          No LabOS teams are available for your profile.
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Roadmap-item create/edit form (F-2): full field set behind the bar. */
 export function ItemFormModal({
   open,
@@ -184,7 +335,8 @@ export function ItemFormModal({
   initiatives,
   initial,
   editing,
-  driSuggestions = [],
+  team = [],
+  memberTeams = [],
   defaultColorIndex = 0,
   onSave,
   onImport,
@@ -193,8 +345,10 @@ export function ItemFormModal({
   onOpenChange: (open: boolean) => void;
   roadmap: Roadmap;
   initiatives: Initiative[];
-  /** Team roster names offered while typing DRIs (F-13). */
-  driSuggestions?: string[];
+  /** Team roster the DRI is picked from (F-13). */
+  team?: TeamMember[];
+  /** The signed-in member's LabOS teams, for the responsible-team picker. */
+  memberTeams?: { uid: string; name: string }[];
   initial?: Partial<ItemFormValues>;
   editing?: RoadmapItem;
   /** Preselected palette hue for new items (the cycling default). */
@@ -208,7 +362,7 @@ export function ItemFormModal({
   const source = editing ?? initial;
   const [values, setValues] = useState<ItemFormValues>({
     initiativeId: source?.initiativeId ?? initiatives[0]?.id ?? '',
-    title: editing?.title ?? '',
+    title: source?.title ?? '',
     description: source?.description ?? '',
     startDate: source?.startDate ?? roadmap.startMonth,
     endDate: source?.endDate ?? spanEnd,
@@ -216,7 +370,9 @@ export function ItemFormModal({
     milestoneDate: source?.milestoneDate ?? null,
     okrs: source?.okrs ?? '',
     dris: source?.dris ?? '',
+    driMemberId: source?.driMemberId ?? null,
     responsibleTeam: source?.responsibleTeam ?? '',
+    responsibleTeamUid: source?.responsibleTeamUid ?? null,
     status: (source?.status as ItemStatus) ?? 'green',
     kpi: source?.kpi ?? '',
     completedAt: source?.completedAt ?? null,
@@ -383,19 +539,15 @@ export function ItemFormModal({
         fullWidth
       />
       <div className="form-row">
-        <Input
-          label="DRI"
+        <DriSelect
+          id="item-dri"
           value={values.dris}
-          onChange={(e) => set('dris', e.target.value)}
-          placeholder="Who's responsible"
-          list="dri-suggestions"
-          fullWidth
+          memberId={values.driMemberId}
+          team={team}
+          onChange={(v, memberId) =>
+            setValues((prev) => ({ ...prev, dris: v, driMemberId: memberId }))
+          }
         />
-        <datalist id="dri-suggestions">
-          {driSuggestions.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
         <Input
           label="KPI"
           value={values.kpi}
@@ -403,13 +555,14 @@ export function ItemFormModal({
           fullWidth
         />
       </div>
-      <Input
-        label="Responsible team"
+      <TeamSelect
+        id="item-responsible-team"
         value={values.responsibleTeam}
-        onChange={(e) => set('responsibleTeam', e.target.value)}
-        placeholder="e.g. Platform, Growth"
-        fullWidth
-        data-testid="item-responsible-team"
+        uid={values.responsibleTeamUid}
+        options={memberTeams}
+        onChange={(v, teamUid) =>
+          setValues((prev) => ({ ...prev, responsibleTeam: v, responsibleTeamUid: teamUid }))
+        }
       />
       <div>
         <span className="form-label">Bar color</span>
@@ -455,20 +608,18 @@ export function ItemFormModal({
       <div>
         <span className="form-label">Status</span>
         <div className="status-group" role="radiogroup" aria-label="Status">
-          {STATUS_OPTIONS.map((opt) => (
+          {ITEM_STATUSES.map((status) => (
             <Button
-              key={opt.value}
+              key={status}
               size="xs"
-              variant={
-                opt.value === 'green' ? 'success' : opt.value === 'yellow' ? 'warning' : 'error'
-              }
-              styleType={values.status === opt.value ? 'fill' : 'light'}
-              onClick={() => set('status', opt.value)}
+              variant={STATUS_VARIANT[status]}
+              styleType={values.status === status ? 'fill' : 'light'}
+              onClick={() => set('status', status)}
               role="radio"
-              aria-checked={values.status === opt.value}
-              data-testid={`status-${opt.value}`}
+              aria-checked={values.status === status}
+              data-testid={`status-${status}`}
             >
-              {opt.label}
+              {STATUS_LABELS[status]}
             </Button>
           ))}
         </div>

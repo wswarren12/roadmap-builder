@@ -104,16 +104,24 @@ function HomeInner() {
   async function confirmDelete() {
     if (!deleting) return;
     setDeleteBusy(true);
+    const gone = deleting;
     try {
-      await api(`/api/roadmaps/${deleting.id}`, { method: 'DELETE' });
-      toast('success', `Deleted "${deleting.title}"`);
-      setDeleting(null);
-      await load();
-    } catch {
-      toast('error', 'Delete failed — please retry');
-    } finally {
-      setDeleteBusy(false);
+      await api(`/api/roadmaps/${gone.id}`, { method: 'DELETE' });
+      toast('success', `Deleted "${gone.title}"`);
+    } catch (e) {
+      // 404 = already deleted elsewhere: treat as gone. Anything else keeps
+      // the row (and the confirm) so the failure is visible and retryable.
+      if (!(e instanceof ApiError && e.status === 404)) {
+        toast('error', e instanceof ApiError ? e.message : 'Delete failed — please retry');
+        setDeleteBusy(false);
+        return;
+      }
     }
+    // Drop the row now; the refetch below reconciles counts and shared lists.
+    setLists((l) => (l ? { ...l, owned: l.owned.filter((r) => r.id !== gone.id) } : l));
+    setDeleting(null);
+    setDeleteBusy(false);
+    await load();
   }
 
   if (signedOut) return <SignedOutLanding />;

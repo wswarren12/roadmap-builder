@@ -39,7 +39,19 @@ export async function POST(req: Request, { params }: Params) {
       }
       continue;
     }
-    if (existing.some((m) => m.name.toLowerCase() === candidate.name.toLowerCase())) {
+    // A DIFFERENT LabOS member who happens to share a display name is still a
+    // distinct person: dedupe by uid only (F-13b). Assignments point at the
+    // roster row id, so two "Alex Smith" rows stay tellable apart.
+    const nameTwin = existing.find(
+      (m) => !m.memberUid && m.name.toLowerCase() === candidate.name.toLowerCase(),
+    );
+    if (nameTwin) {
+      // A manually added placeholder for this person: link it to the profile
+      // instead of creating a duplicate row.
+      await store.updateTeamMember(nameTwin.id, {
+        memberUid: candidate.uid,
+        ...(candidate.image ? { image: candidate.image } : {}),
+      });
       continue;
     }
     await store.addTeamMember(params.id, {

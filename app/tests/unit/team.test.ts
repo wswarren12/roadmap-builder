@@ -24,10 +24,11 @@ describe('driAvatars (F-13)', () => {
   it('matches roster names case-insensitively and keeps unknown names', () => {
     const members = [member('Maria Garcia', 'https://img/mg.png'), member('Ada')];
     const avatars = driAvatars('maria garcia, Ada, Grace Hopper', members);
+    // F-13b adds the resolved identity (uid + roster row id) to each avatar.
     expect(avatars).toEqual([
-      { name: 'Maria Garcia', image: 'https://img/mg.png' },
-      { name: 'Ada', image: null },
-      { name: 'Grace Hopper', image: null },
+      { name: 'Maria Garcia', image: 'https://img/mg.png', uid: null, memberId: 'Maria Garcia' },
+      { name: 'Ada', image: null, uid: null, memberId: 'Ada' },
+      { name: 'Grace Hopper', image: null, uid: null, memberId: null },
     ]);
   });
 

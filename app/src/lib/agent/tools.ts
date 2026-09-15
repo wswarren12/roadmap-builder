@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { ITEM_PALETTE } from '../colors';
 import { getStore } from '../store';
 import { createSprintSynced, updateItemSynced, updateSprintSynced } from '../sync';
-import type { ItemStatus, Roadmap } from '../types';
+import { ITEM_STATUSES, isItemStatus, type Roadmap } from '../types';
 import {
   MAX_INITIATIVES,
   roadmapSpan,
@@ -51,7 +51,7 @@ export const AGENT_TOOLS: Anthropic.Messages.ToolUnion[] = [
         description: { type: 'string' },
         dris: { type: 'string', description: 'Comma-separated DRI names' },
         responsibleTeam: { type: 'string', description: 'Team responsible for delivery' },
-        status: { type: 'string', enum: ['green', 'yellow', 'red'] },
+        status: { type: 'string', enum: [...ITEM_STATUSES] },
         okrs: { type: 'string' },
         kpi: { type: 'string' },
         milestoneText: { type: 'string' },
@@ -76,7 +76,7 @@ export const AGENT_TOOLS: Anthropic.Messages.ToolUnion[] = [
         description: { type: 'string' },
         dris: { type: 'string' },
         responsibleTeam: { type: 'string' },
-        status: { type: 'string', enum: ['green', 'yellow', 'red'] },
+        status: { type: 'string', enum: [...ITEM_STATUSES] },
         okrs: { type: 'string' },
         kpi: { type: 'string' },
         milestoneText: { type: 'string' },
@@ -181,7 +181,6 @@ export async function roadmapSnapshot(roadmap: Roadmap): Promise<string> {
   });
 }
 
-const STATUSES: ItemStatus[] = ['green', 'yellow', 'red'];
 
 function err(message: string): ToolOutcome {
   return { result: `Error: ${message}`, isError: true };
@@ -256,9 +255,7 @@ export async function executeAgentTool(
           okrs: String(input.okrs ?? ''),
           dris: String(input.dris ?? ''),
           responsibleTeam: String(input.responsibleTeam ?? ''),
-          status: STATUSES.includes(input.status as ItemStatus)
-            ? (input.status as ItemStatus)
-            : 'green',
+          status: isItemStatus(input.status) ? input.status : 'green',
           kpi: String(input.kpi ?? ''),
         },
         colorIndex,
@@ -308,8 +305,8 @@ export async function executeAgentTool(
       if (msErr) return err(msErr.message);
       if (input.milestoneDate !== undefined) patch.milestoneDate = milestoneDate || null;
       if (input.status !== undefined) {
-        if (!STATUSES.includes(input.status as ItemStatus)) {
-          return err('status must be green, yellow, or red');
+        if (!isItemStatus(input.status)) {
+          return err(`status must be one of ${ITEM_STATUSES.join(', ')}`);
         }
         patch.status = input.status;
       }

@@ -18,6 +18,7 @@ function switchDevUser(user: { uid: string; name: string; email: string | null }
 
 export function AppNav() {
   const pathname = usePathname();
+  const currentRoadmapId = pathname?.match(/^\/roadmaps\/([^/]+)/)?.[1] ?? null;
   const [me, setMe] = useState<{ name: string; email: string | null } | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [devMode, setDevMode] = useState(false);
@@ -67,7 +68,12 @@ export function AppNav() {
         logoHref="/"
         items={[
           { label: 'Home', href: '/profile', active: pathname === '/profile' },
-          { label: 'Backlog', href: '/backlog', active: pathname === '/backlog' },
+          {
+            label: 'Backlog',
+            // Carry the roadmap being worked on so the backlog opens scoped to it.
+            href: currentRoadmapId ? `/backlog?roadmap=${currentRoadmapId}` : '/backlog',
+            active: pathname === '/backlog',
+          },
         ]}
         userName={me?.name}
         onAvatarClick={() => setIdentityOpen((open) => !open)}

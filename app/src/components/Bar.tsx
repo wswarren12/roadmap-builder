@@ -33,6 +33,7 @@ export function Bar({
   enterIndex = 0,
   dropTarget = false,
   avatars = [],
+  tag,
   onOpen,
   onCommitDates,
   onDragMove,
@@ -60,6 +61,8 @@ export function Bar({
   dropTarget?: boolean;
   /** DRI avatars rendered at the bar's end — image or initials (F-13). */
   avatars?: DriAvatar[];
+  /** Small chip after the title, e.g. which field matched a person filter. */
+  tag?: string;
   onOpen: () => void;
   onCommitDates: (
     startDate: string,
@@ -116,6 +119,11 @@ export function Bar({
     >
       {statusColor && <span className="status-dot" style={{ background: statusColor }} />}
       <span className="bar-title">{title}</span>
+      {tag && width >= 96 && (
+        <span className="bar-tag" data-testid={`${testId}-tag`}>
+          {tag}
+        </span>
+      )}
       {avatars.length > 0 && width >= 64 && (
         <span className="bar-avatars" data-testid={`${testId}-avatars`}>
           {avatars.slice(0, 3).map((a) => (

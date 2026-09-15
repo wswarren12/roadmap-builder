@@ -1,13 +1,15 @@
 import { addDays, daysBetween } from './dates';
-import type {
-  BacklogImportTarget,
-  BacklogItem,
-  BacklogItemInput,
-  BacklogSprint,
-  ItemInput,
-  RoadmapItem,
-  SprintInput,
-  SprintItem,
+import {
+  isItemStatus,
+  type BacklogImportTarget,
+  type BacklogItem,
+  type BacklogItemInput,
+  type BacklogSprint,
+  type ItemInput,
+  type RoadmapBacklogItem,
+  type RoadmapItem,
+  type SprintInput,
+  type SprintItem,
 } from './types';
 
 export type BacklogPayload = Omit<BacklogItem, 'id' | 'ownerUid' | 'createdAt' | 'updatedAt'>;
@@ -153,9 +155,26 @@ export function parseBacklogPayload(value: unknown): BacklogPayload {
     okrs: text(row.okrs),
     dris: text(row.dris),
     responsibleTeam: text(row.responsibleTeam),
-    status: row.status === 'yellow' || row.status === 'red' ? row.status : 'green',
+    status: isItemStatus(row.status) ? row.status : 'green',
     kpi: text(row.kpi),
     colorIndex: Number.isInteger(row.colorIndex) ? Math.max(0, Number(row.colorIndex)) : 0,
     sprints,
   };
+}
+
+/** Tolerant parse of roadmaps.backlog JSONB; malformed entries are dropped. */
+export function parseRoadmapBacklog(value: unknown): RoadmapBacklogItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: RoadmapBacklogItem[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const row = entry as Record<string, unknown>;
+    if (typeof row.id !== 'string') continue;
+    try {
+      items.push({ id: row.id, ...parseBacklogPayload(row), createdAt: text(row.createdAt) });
+    } catch {
+      // drop the malformed entry rather than failing the whole roadmap
+    }
+  }
+  return items;
 }

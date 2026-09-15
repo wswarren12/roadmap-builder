@@ -399,7 +399,11 @@
 }
 
 .timeline-scroll {
-  overflow-x: auto;
+  // Scrolls both ways: the month header is sticky against THIS box, so it
+  // stays visible while rows scroll vertically and, being inside the
+  // horizontally-scrolled inner, stays aligned with the bars.
+  overflow: auto;
+  max-height: calc(100dvh - var(--app-header-height, 64px) - 2 * var(--spacing-xl));
   position: relative;
 }
 
@@ -700,6 +704,28 @@
 
 // Initials variant: PL-blue circle, white ring, white letters — readable at
 // bar-avatar sizes where the old neutral-on-neutral pairing washed out.
+/* Assignment profile links (F-13b): a person/team that resolved to a LabOS
+   profile links to it; an unlinked one stays plain text. */
+.profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  max-width: 100%;
+}
+
+a.profile-link {
+  color: var(--foreground-brand-primary);
+  text-decoration: none;
+}
+
+a.profile-link:hover .profile-link-name {
+  text-decoration: underline;
+}
+
+.profile-link-name {
+  overflow-wrap: anywhere;
+}
+
 .avatar-chip--initials {
   background: var(--background-brand-default);
   color: var(--background-base-white);
@@ -1447,5 +1473,228 @@
 
   dd {
     margin: 0;
+  }
+}
+
+// ─── View controls, status legend, board ─────────────────────────────────────
+
+.view-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-neutral-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  @include pl.label-xs;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--background-base-white);
+  color: var(--foreground-neutral-secondary);
+  border: 0;
+  cursor: pointer;
+
+  &--on {
+    background: var(--background-brand-soft);
+    color: var(--foreground-brand-primary);
+  }
+}
+
+.status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  @include pl.body-xs;
+  color: var(--foreground-neutral-secondary);
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  i {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+  }
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  align-items: start;
+  overflow-x: auto;
+}
+
+.board-col {
+  background: var(--background-neutral-soft-muted);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  min-height: 160px;
+
+  &--drop {
+    background: var(--background-brand-soft);
+    box-shadow: inset 0 0 0 2px var(--border-brand-subtle);
+  }
+}
+
+.board-col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  @include pl.label-sm;
+  color: var(--foreground-neutral-secondary);
+}
+
+.board-col-count {
+  @include pl.label-xs;
+  color: var(--foreground-neutral-tertiary);
+}
+
+.board-add {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.board-card {
+  background: var(--background-base-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  border-left: 4px solid var(--border-neutral-subtle);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  @include pl.body-sm;
+  color: var(--foreground-neutral-primary);
+
+  &--item {
+    cursor: pointer;
+  }
+
+  &--item[draggable='true'] {
+    cursor: grab;
+  }
+
+  &--dragging {
+    opacity: 0.5;
+  }
+
+  &--item {
+
+    &:hover {
+      box-shadow: var(--shadow-sm);
+    }
+  }
+}
+
+.board-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.board-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  @include pl.body-xs;
+  color: var(--foreground-neutral-tertiary);
+}
+
+.board-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.board-status-select {
+  @include pl.body-xs;
+  flex: 1;
+  min-width: 90px;
+  height: 26px;
+  border: 1px solid var(--border-neutral-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--background-base-white);
+  padding: 2px var(--spacing-xs);
+}
+
+.board-empty {
+  @include pl.body-xs;
+  color: var(--foreground-neutral-quaternary);
+  text-align: center;
+  padding: var(--spacing-md);
+  margin: 0;
+}
+
+// ─── View filters ────────────────────────────────────────────────────────────
+
+.filter-select {
+  @include pl.label-xs;
+  border: 1px solid var(--border-neutral-subtle);
+  border-radius: var(--radius-md);
+  background: var(--background-base-white);
+  color: var(--foreground-neutral-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  max-width: 180px;
+}
+
+.filter-empty {
+  background: var(--background-base-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--spacing-xl);
+}
+
+.bar-tag {
+  @include pl.label-xs;
+  flex-shrink: 0;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 0.25);
+  pointer-events: none;
+}
+
+.backlog-legacy {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-md);
+  border: 1px dashed var(--border-neutral-subtle);
+  border-radius: var(--radius-lg);
+
+  h3 {
+    @include pl.body-sm-strong;
+    margin: 0 0 var(--spacing-xs);
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    @include pl.body-sm;
   }
 }

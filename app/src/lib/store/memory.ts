@@ -106,6 +106,7 @@ export class MemoryStore implements Store {
       startMonth: input.startMonth,
       endMonth: input.endMonth,
       palette: input.palette ?? 'pl',
+      backlog: [],
       createdAt: now(),
       updatedAt: now(),
     };
@@ -119,7 +120,7 @@ export class MemoryStore implements Store {
 
   async updateRoadmap(
     id: string,
-    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth'>>,
+    patch: Partial<Pick<Roadmap, 'title' | 'description' | 'startMonth' | 'endMonth' | 'backlog'>>,
   ) {
     const r = this.db.roadmaps.get(id);
     if (!r) throw new Error('roadmap not found');
@@ -256,7 +257,9 @@ export class MemoryStore implements Store {
       milestoneDate: input.milestoneDate ?? null,
       okrs: input.okrs ?? '',
       dris: input.dris ?? '',
+      driMemberId: input.driMemberId ?? null,
       responsibleTeam: input.responsibleTeam ?? '',
+      responsibleTeamUid: input.responsibleTeamUid ?? null,
       status: input.status ?? 'green',
       kpi: input.kpi ?? '',
       completedAt: input.completedAt ?? null,
@@ -345,6 +348,7 @@ export class MemoryStore implements Store {
       milestoneDate: input.milestoneDate ?? null,
       kpi: input.kpi ?? '',
       dri: input.dri ?? '',
+      driMemberId: input.driMemberId ?? null,
       completedAt: input.completedAt ?? null,
       createdAt: now(),
       updatedAt: now(),
@@ -564,7 +568,7 @@ export class MemoryStore implements Store {
     return member;
   }
 
-  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image'>>) {
+  async updateTeamMember(id: string, patch: Partial<Pick<TeamMember, 'name' | 'image' | 'memberUid'>>) {
     const m = this.db.teamMembers.get(id);
     if (!m) throw new Error('team member not found');
     const updated = { ...m, ...patch };

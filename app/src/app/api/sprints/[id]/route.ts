@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authorizeRoadmap, jsonError, readJson } from '@/lib/api-helpers';
+import { resolveAssignment } from '@/lib/assignment';
 import { getStore } from '@/lib/store';
 import { deleteSprintSynced, updateSprintSynced } from '@/lib/sync';
 import type { SprintInput } from '@/lib/types';
@@ -38,7 +39,9 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.name !== undefined) patch.name = String(body.name).trim();
   if (body.description !== undefined) patch.description = String(body.description ?? '');
   if (body.kpi !== undefined) patch.kpi = String(body.kpi ?? '');
-  if (body.dri !== undefined) patch.dri = String(body.dri ?? '');
+  const assigned = await resolveAssignment(getStore(), item.roadmapId, body, { dri: 'dri', team: false });
+  if ('error' in assigned) return jsonError(400, assigned.error.message, assigned.error.field);
+  Object.assign(patch, assigned.patch);
   if (body.milestoneText !== undefined) patch.milestoneText = String(body.milestoneText ?? '');
   if (body.completedAt !== undefined) {
     const doneErr = validateCompletedDate(body.completedAt);

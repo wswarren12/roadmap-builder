@@ -25,7 +25,14 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
-    user: { uid: identity.uid, name: identity.name, email: identity.email },
+    user: {
+      uid: identity.uid,
+      name: identity.name,
+      email: identity.email,
+      // Responsible-team picker options (F-13b): the signed-in member's own
+      // LabOS teams. There is no API to enumerate arbitrary teams.
+      teams: identity.teams ?? [],
+    },
     lastRoadmapId,
     lastRoadmapGone,
     devMode: process.env.DEV_AUTH === '1',

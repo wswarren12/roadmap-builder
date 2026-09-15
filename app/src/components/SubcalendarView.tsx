@@ -19,13 +19,15 @@ import {
 } from '@/lib/dates';
 import { assignLanes } from '@/lib/stacking';
 import { driAvatars } from '@/lib/team';
-import type { Initiative, Roadmap, RoadmapItem, Role, SprintItem, TeamMember } from '@/lib/types';
+import { STATUS_LABELS, type Initiative, type ItemStatus, type Roadmap, type RoadmapItem, type Role, type SprintItem, type TeamMember } from '@/lib/types';
 import { ApiError, api } from '@/lib/client/api';
 import { exportItemPdf } from '@/lib/client/pdf';
 import { Bar } from './Bar';
 import { ConfirmModal } from './ConfirmModal';
 import { ItemFormModal, type ItemFormValues } from './ItemFormModal';
 import { Modal } from './Modal';
+import { PersonLink, TeamLink } from './ProfileLink';
+import { useMemberTeams } from './useMemberTeams';
 import { SignedOutLanding } from './SignedOutLanding';
 import { SprintCard } from './SprintCard';
 import { SprintFormModal, type SprintFormValues } from './SprintFormModal';
@@ -47,10 +49,11 @@ interface ItemData {
 
 type LoadState = 'loading' | 'ok' | 'signedout' | 'forbidden' | 'gone' | 'error';
 
-const STATUS_BADGE: Record<string, 'green' | 'yellow' | 'red'> = {
+const STATUS_BADGE: Record<ItemStatus, 'green' | 'yellow' | 'red' | 'gray'> = {
   green: 'green',
   yellow: 'yellow',
   red: 'red',
+  deprioritized: 'gray',
 };
 
 /** Item drill-down (F-3): week columns over exactly the item's timeline,
@@ -64,6 +67,7 @@ export function SubcalendarView({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const memberTeams = useMemberTeams();
   const [data, setData] = useState<ItemData | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -315,9 +319,12 @@ export function SubcalendarView({
   async function confirmMoveToBacklog() {
     setBusy(true);
     try {
-      await api(`/api/items/${item.id}/backlog`, { method: 'POST' });
-      toast('success', `Moved "${item.title}" to your backlog`);
-      router.push('/backlog');
+      await api(`/api/roadmaps/${roadmap.id}/backlog`, {
+        method: 'POST',
+        body: { fromItemId: item.id },
+      });
+      toast('success', `Moved "${item.title}" to this roadmap's backlog`);
+      router.push(`/backlog?roadmap=${roadmap.id}`);
     } catch (error) {
       toast('error', error instanceof ApiError ? error.message : 'Move failed — please retry');
       setBusy(false);
@@ -360,7 +367,7 @@ export function SubcalendarView({
             <span className="subcal-color-chip" style={{ background: color }} />
             {item.title}
             <Badge color={STATUS_BADGE[item.status]} styleType="light" size="sm">
-              {item.status}
+              {STATUS_LABELS[item.status]}
             </Badge>
           </h1>
           <div className="header-actions">
@@ -452,14 +459,28 @@ export function SubcalendarView({
           {item.dris && (
             <div className="detail-field">
               <span className="detail-label">DRI</span>
-              <span className="detail-value">{item.dris}</span>
+              <span className="detail-value">
+                {driAvatars(item.dris, team, item.driMemberId).map((a) => (
+                  <PersonLink
+                    key={a.memberId ?? a.name}
+                    name={a.name}
+                    image={a.image}
+                    uid={a.uid}
+                    testId="item-dri-value"
+                  />
+                ))}
+              </span>
             </div>
           )}
           {item.responsibleTeam && (
             <div className="detail-field">
               <span className="detail-label">Responsible team</span>
-              <span className="detail-value" data-testid="item-responsible-team-value">
-                {item.responsibleTeam}
+              <span className="detail-value">
+                <TeamLink
+                  name={item.responsibleTeam}
+                  uid={item.responsibleTeamUid}
+                  testId="item-responsible-team-value"
+                />
               </span>
             </div>
           )}
@@ -481,7 +502,7 @@ export function SubcalendarView({
       </header>
 
       <div className="timeline-card">
-        <div className="timeline-scroll" ref={scrollRef}>
+        <div className="timeline-scroll" ref={scrollRef} data-testid="item-timeline-scroll">
           <div className="timeline-inner" style={{ width: totalDays * pxPerDay }}>
             <div className="timeline-head">
               {weeks.map((w) => (
@@ -576,7 +597,7 @@ export function SubcalendarView({
                     }
                     onOpen={() => setOpenSprintId(sprint.id)}
                     onCommitDates={(s, e) => commitSprintDates(sprint, s, e)}
-                    avatars={driAvatars(sprint.dri, team)}
+                    avatars={driAvatars(sprint.dri, team, sprint.driMemberId)}
                   />
                 ))}
               </div>
@@ -604,7 +625,7 @@ export function SubcalendarView({
           item={item}
           initial={sprintForm.initial}
           editing={sprintForm.editing}
-          driSuggestions={team.map((m) => m.name)}
+          team={team}
           onSave={async (values) => {
             await saveSprint(values, sprintForm.editing);
             setSprintForm(null);
@@ -655,11 +676,13 @@ export function SubcalendarView({
 
       {editingItem && (
         <ItemFormModal
+          memberTeams={memberTeams}
           open
           onOpenChange={(open) => !open && setEditingItem(false)}
           roadmap={roadmap}
           initiatives={data.initiatives}
           editing={item}
+          team={team}
           onSave={saveItemEdit}
           onImport={async (sourceItemId, initiativeId) => {
             const res = await api<{ item: RoadmapItem }>(
@@ -701,8 +724,8 @@ export function SubcalendarView({
       <ConfirmModal
         open={movingToBacklog}
         onOpenChange={setMovingToBacklog}
-        title="Move item to your backlog?"
-        message={`“${item.title}” will leave this roadmap. Its dates and completion state will be removed; preserved sprint timing will scale when you add it to another roadmap.`}
+        title="Move item to this roadmap's backlog?"
+        message={`“${item.title}” will leave the timeline and wait in this roadmap's backlog. Its dates and completion state are removed; sprint timing is kept relative and scales when you schedule it again.`}
         confirmLabel="Move to backlog"
         busy={busy}
         onConfirm={confirmMoveToBacklog}

@@ -21,14 +21,15 @@ test.describe('cleanup batch: initiative descriptions + responsible team', () =>
     context,
     request,
   }) => {
-    const owner = makeUser('owner');
+    const owner = makeUser('owner', [{ uid: 't-platform', name: 'Platform' }]);
     await loginAs(context, owner);
     const seeded = await seedRoadmap(request, owner);
     const itemId = await seedItem(request, owner, seeded);
 
     await page.goto(`/roadmaps/${seeded.roadmapId}/items/${itemId}`);
     await page.getByTestId('edit-item').click();
-    await page.getByTestId('item-responsible-team').fill('Platform');
+    // Responsible team is a LabOS-team picker now; this owner has one team.
+    await page.getByTestId('item-responsible-team').selectOption({ label: 'Platform · LabOS' });
     await page.getByTestId('save-item').click();
     await expect(page.getByTestId('item-responsible-team-value')).toHaveText('Platform');
 

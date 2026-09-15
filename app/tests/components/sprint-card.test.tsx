@@ -17,6 +17,7 @@ const sprint: SprintItem = {
   milestoneDate: '2026-08-12',
   kpi: 'All routes green',
   dri: 'Ada',
+  driMemberId: null,
   completedAt: null,
   syncGroupId: null,
   createdAt: '',
