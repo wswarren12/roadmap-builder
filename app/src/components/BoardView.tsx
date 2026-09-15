@@ -46,13 +46,15 @@ export function StatusBadge({ status, completed }: { status: ItemStatus; complet
   );
 }
 
-/** Kanban columns: the roadmap backlog, then one per existing item status,
- *  then Completed (the existing `completedAt` flag, which outranks status). */
+/** Kanban columns, left to right: the roadmap backlog, the active R/Y/G
+ *  statuses, Completed (the existing `completedAt` flag, which outranks
+ *  status), and finally Deprioritized — parked work sits past done. */
 type Column = 'backlog' | ItemStatus | 'completed';
 const COLUMNS: { key: Column; title: string }[] = [
   { key: 'backlog', title: 'Backlog' },
-  ...ITEM_STATUSES.map((s) => ({ key: s, title: STATUS_LABELS[s] })),
+  ...ITEM_STATUSES.filter((s) => s !== 'deprioritized').map((s) => ({ key: s, title: STATUS_LABELS[s] })),
   { key: 'completed', title: 'Completed' },
+  { key: 'deprioritized', title: STATUS_LABELS.deprioritized },
 ];
 
 export function columnFor(item: Pick<RoadmapItem, 'status' | 'completedAt'>): Column {

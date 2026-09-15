@@ -70,15 +70,20 @@ async function applyMigrations(pool) {
   for (const file of files) {
     if (done.has(file)) continue;
     const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+    // A file marked `-- pln:no-transaction` runs unwrapped: some DDL (notably
+    // ALTER TYPE … ADD VALUE) is rejected inside a transaction block. Such a
+    // file must be statement-wise idempotent — a partial run re-applies on the
+    // next boot rather than rolling back.
+    const wrapped = !/^\s*--\s*pln:no-transaction/m.test(sql);
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      if (wrapped) await client.query('BEGIN');
       await client.query(sql);
       await client.query('INSERT INTO _pln_migrations (filename) VALUES ($1)', [file]);
-      await client.query('COMMIT');
-      log(`migration=${file} status=applied`);
+      if (wrapped) await client.query('COMMIT');
+      log(`migration=${file} status=applied${wrapped ? '' : ' (no-transaction)'}`);
     } catch (e) {
-      await client.query('ROLLBACK');
+      if (wrapped) await client.query('ROLLBACK');
       if (DUPLICATE_CODES.has(e.code)) {
         // Objects already exist but the ledger missed them — reconcile.
         await client.query(

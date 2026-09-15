@@ -20,6 +20,10 @@ test.describe('Kanban view by status', () => {
     for (const col of ['backlog', 'green', 'yellow', 'red', 'deprioritized', 'completed']) {
       await expect(page.getByTestId(`board-col-${col}`)).toContainText('Nothing here');
     }
+    // Deprioritized sits past Completed, at the far right.
+    await expect(page.locator('.board-col-head > span:first-child')).toHaveText([
+      'Backlog', 'On track', 'At risk', 'Off track', 'Completed', 'Deprioritized',
+    ]);
     await expect(page.getByTestId('board-card')).toHaveCount(0);
 
     await seedItem(request, owner, seeded, { title: 'Signup revamp', status: 'yellow', dris: 'Ada' });
