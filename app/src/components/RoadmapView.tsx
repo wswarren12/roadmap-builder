@@ -752,6 +752,14 @@ export function RoadmapView({ roadmapId }: { roadmapId: string }) {
                 {pendingSuggestions.length} suggestion{pendingSuggestions.length === 1 ? '' : 's'}
               </Button>
             )}
+            <Button
+              variant="secondary"
+              styleType="border"
+              onClick={() => router.push(`/backlog?roadmap=${roadmap.id}`)}
+              data-testid="backlog-button"
+            >
+              Backlog{roadmap.backlog.length > 0 ? ` (${roadmap.backlog.length})` : ''}
+            </Button>
             {editable && (
               <Button
                 variant="secondary"

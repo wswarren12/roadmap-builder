@@ -1,4 +1,5 @@
 @use '../../pl-design-system/styles/mixins.scss' as pl;
+@use '../../pl-design-system/styles/media' as media;
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
@@ -1529,7 +1530,7 @@ a.profile-link:hover .profile-link-name {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(6, minmax(200px, 1fr));
+  grid-template-columns: repeat(6, minmax(220px, 1fr));
   gap: var(--spacing-md);
   align-items: start;
   overflow-x: auto;
@@ -1620,13 +1621,16 @@ a.profile-link:hover .profile-link-name {
 .board-card-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-xs);
 }
 
 .board-status-select {
   @include pl.body-xs;
-  flex: 1;
-  min-width: 90px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 10ch;
+  max-width: 100%;
   height: 26px;
   border: 1px solid var(--border-neutral-subtle);
   border-radius: var(--radius-sm);
@@ -1651,7 +1655,11 @@ a.profile-link:hover .profile-link-name {
   background: var(--background-base-white);
   color: var(--foreground-neutral-secondary);
   padding: var(--spacing-xs) var(--spacing-sm);
-  max-width: 180px;
+  // Native selects size to their widest option when width is auto — never
+  // cap below that, only below the container.
+  width: auto;
+  min-width: 10ch;
+  max-width: 100%;
 }
 
 .filter-empty {
@@ -1696,5 +1704,129 @@ a.profile-link:hover .profile-link-name {
     justify-content: space-between;
     gap: var(--spacing-md);
     @include pl.body-sm;
+  }
+}
+
+// ─── Dropdown sizing + mobile stacking ───────────────────────────────────────
+
+// Every native select grows to fit its widest option; only the container caps it.
+select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+
+.mobile-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.mobile-menu-link {
+  @include pl.body-sm-strong;
+  color: var(--foreground-neutral-primary);
+  text-decoration: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+
+  &[aria-current] {
+    background: var(--background-brand-soft);
+    color: var(--foreground-brand-primary);
+  }
+
+  &:hover {
+    background: var(--background-neutral-subtle);
+  }
+}
+
+.mobile-menu-identity {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-neutral-xsubtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+@include media.tablet-below {
+  .app-main {
+    padding: var(--spacing-md);
+  }
+
+  // The primary action moves into the hamburger drawer on small screens.
+  .nav-new-roadmap {
+    display: none;
+  }
+
+  .roadmap-header {
+    padding: var(--spacing-md);
+  }
+
+  .roadmap-header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .roadmap-meta {
+    row-gap: var(--spacing-sm);
+  }
+
+  .roadmap-range-inputs {
+    flex-wrap: wrap;
+  }
+
+  .view-controls {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+
+    .filter-select {
+      flex: 1 1 100%;
+    }
+  }
+
+  .status-legend {
+    gap: var(--spacing-sm);
+  }
+
+  // Board: one column per row, cards stacked, instead of a 6-wide grid.
+  .board {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-page {
+    gap: var(--spacing-lg);
+  }
+
+  .backlog-actions {
+    width: 100%;
+
+    .filter-select {
+      flex: 1 1 100%;
+    }
+  }
+
+  // Table scrolls sideways as a unit instead of crushing its columns.
+  .backlog-page table {
+    display: block;
+    overflow-x: auto;
+
+    th:first-child,
+    td:first-child {
+      min-width: 12rem;
+    }
+
+    .backlog-actions {
+      flex-wrap: nowrap;
+    }
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
   }
 }

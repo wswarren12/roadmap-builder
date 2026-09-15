@@ -77,15 +77,19 @@ describe('baseline analytics (kit v1.11 app-analytics)', () => {
     vi.stubGlobal('parent', { postMessage: post }); // simulate being iframed
     document.title = 'Home';
     initRouteSync();
+    // 5e43eaf scoped the target origin to the LabOS portal (the path can carry
+    // an invite token), so the wildcard is deliberately gone.
     expect(post).toHaveBeenLastCalledWith(
       { type: 'pln-ai-app:route', path: '/', title: 'Home' },
-      '*',
+      'https://os.pl.xyz',
     );
     history.pushState({}, '', '/r/abc?x=1');
     expect(post).toHaveBeenLastCalledWith(
       { type: 'pln-ai-app:route', path: '/r/abc?x=1', title: 'Home' },
-      '*',
+      'https://os.pl.xyz',
     );
+    // Never broadcast to any origin.
+    expect(post.mock.calls.every((c) => c[1] === 'https://os.pl.xyz')).toBe(true);
     history.pushState({}, '', '/r/abc?x=1'); // no duplicate for identical state
     expect(post).toHaveBeenCalledTimes(2);
   });

@@ -338,7 +338,7 @@ export function BoardView({
                     >
                       {COLUMNS.filter((c) => c.key !== 'backlog').map((c) => (
                         <option key={c.key} value={c.key}>
-                          {c.key === 'completed' ? 'Completed' : `Move to ${c.title}`}
+                          {c.title}
                         </option>
                       ))}
                     </select>

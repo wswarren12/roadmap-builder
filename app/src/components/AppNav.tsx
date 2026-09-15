@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { NavBar } from '@pl/components/NavBar';
 import { Button } from '@pl/components/Button';
+import { Drawer, DrawerBody, DrawerHeader } from '@pl/components/Drawer';
 import { api } from '@/lib/client/api';
 import { DEV_USERS } from '@/lib/dev-users';
 import { NewRoadmapModal } from './NewRoadmapModal';
@@ -24,6 +25,8 @@ export function AppNav() {
   const [devMode, setDevMode] = useState(false);
   const [creating, setCreating] = useState(false);
   const [identityOpen, setIdentityOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const backlogHref = currentRoadmapId ? `/backlog?roadmap=${currentRoadmapId}` : '/backlog';
   const identityRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,26 +71,25 @@ export function AppNav() {
         logoHref="/"
         items={[
           { label: 'Home', href: '/profile', active: pathname === '/profile' },
-          {
-            label: 'Backlog',
-            // Carry the roadmap being worked on so the backlog opens scoped to it.
-            href: currentRoadmapId ? `/backlog?roadmap=${currentRoadmapId}` : '/backlog',
-            active: pathname === '/backlog',
-          },
+          // Carry the roadmap being worked on so the backlog opens scoped to it.
+          { label: 'Backlog', href: backlogHref, active: pathname === '/backlog' },
         ]}
         userName={me?.name}
         onAvatarClick={() => setIdentityOpen((open) => !open)}
+        onMenuClick={() => setMenuOpen(true)}
         actions={
           me ? (
-            <Button
-              variant="primary"
-              styleType="fill"
-              size="sm"
-              onClick={() => setCreating(true)}
-              data-testid="new-roadmap"
-            >
-              New roadmap
-            </Button>
+            <span className="nav-new-roadmap">
+              <Button
+                variant="primary"
+                styleType="fill"
+                size="sm"
+                onClick={() => setCreating(true)}
+                data-testid="new-roadmap"
+              >
+                New roadmap
+              </Button>
+            </span>
           ) : undefined
         }
       />
@@ -121,6 +123,50 @@ export function AppNav() {
           )}
         </div>
       )}
+      {/* Mobile: the NavBar collapses its links/actions behind a hamburger below 768px. */}
+      <Drawer open={menuOpen} onOpenChange={setMenuOpen} side="right" size="sm">
+        <DrawerHeader title="Menu" onClose={() => setMenuOpen(false)} />
+        <DrawerBody>
+          <nav className="mobile-menu" data-testid="mobile-menu" aria-label="Main">
+            <a href="/profile" className="mobile-menu-link" aria-current={pathname === '/profile' || undefined}>Home</a>
+            <a href={backlogHref} className="mobile-menu-link" aria-current={pathname === '/backlog' || undefined}>Backlog</a>
+            {me && (
+              <Button
+                variant="primary"
+                styleType="fill"
+                fullWidth
+                onClick={() => {
+                  setMenuOpen(false);
+                  setCreating(true);
+                }}
+                data-testid="mobile-new-roadmap"
+              >
+                New roadmap
+              </Button>
+            )}
+            <div className="mobile-menu-identity">
+              <span className="identity-name">{me ? me.name : 'Not signed in'}</span>
+              {devMode && (
+                <div className="identity-switcher">
+                  <span className="identity-switcher-label">Switch dev user</span>
+                  {DEV_USERS.map((user) => (
+                    <button
+                      key={user.uid}
+                      type="button"
+                      className="identity-switch-btn"
+                      disabled={uid === user.uid}
+                      onClick={() => switchDevUser(user)}
+                    >
+                      {user.name}
+                      {uid === user.uid && <span className="identity-switch-active"> ✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </nav>
+        </DrawerBody>
+      </Drawer>
       {creating && <NewRoadmapModal open onOpenChange={setCreating} />}
     </>
   );
